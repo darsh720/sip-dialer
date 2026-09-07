@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+pyVoIP==1.6.3
+pyaudio
+websockets
