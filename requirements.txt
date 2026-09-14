@@ -2,6 +2,8 @@ fastapi
 uvicorn[standard]
 pydantic
 python-dotenv
-pyVoIP==1.6.3
+pyVoIP==1.6.8
 pyaudio
 websockets
+numpy>=1.24.0
+scipy>=1.10.0

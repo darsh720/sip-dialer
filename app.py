@@ -23,9 +23,56 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-import pyVoIP.SIP
-from pyVoIP.SIP import SIPClient, SIPMessage, SIPParseError, SIPStatus
+# NOTE: pyVoIP 1.6.8 introduced a dependency from SIP.py on
+# pyVoIP.VoIP.status (PhoneStatus), creating a circular import between
+# pyVoIP.SIP and pyVoIP.VoIP. Importing something under pyVoIP.VoIP
+# *first* resolves the cycle correctly; importing pyVoIP.SIP first (as
+# this file used to) triggers it from the wrong end and raises
+# "AttributeError: partially initialized module 'pyVoIP.SIP' has no
+# attribute 'SIPMessage'". Keep this import order.
 from pyVoIP.VoIP import VoIPPhone, CallState, InvalidStateError
+import pyVoIP.SIP
+import pyVoIP.RTP as RTP
+from pyVoIP.SIP import SIPClient, SIPMessage, SIPParseError, SIPStatus
+
+
+# ---------------------------------------------------------------------------
+# FIX 3: Bind the RTP socket to all interfaces (0.0.0.0) instead of the
+# single private IP used for SDP advertisement. pyVoIP conflates the two,
+# so on machines with more than one active network path (VPN adapter +
+# LAN/Wi-Fi, etc.) the RTP socket can end up bound to an address the OS
+# never actually delivers the caller's return audio to, even though the
+# packets do arrive on the box (signaling still works because it binds
+# separately). Softphones like MicroSIP/Zoiper avoid this by listening on
+# all interfaces, which is what we replicate here.
+# ---------------------------------------------------------------------------
+
+def _patched_rtp_start(self):
+    self.sin = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    self.sout = self.sin
+    self.sin.bind(("0.0.0.0", self.inPort))
+    self.sin.setblocking(False)
+
+    r = threading.Timer(0, self.recv)
+    r.name = "RTP Receiver"
+    r.start()
+    t = threading.Timer(0, self.trans)
+    t.name = "RTP Transmitter"
+    t.start()
+
+
+RTP.RTPClient.start = _patched_rtp_start
+
+_orig_rtp_encode_packet = RTP.RTPClient.encode_packet
+
+
+def _patched_rtp_encode_packet(self, payload):
+    if self.preference == RTP.PayloadType.PCMA:
+        return self.encode_pcma(payload)
+    return _orig_rtp_encode_packet(self, payload)
+
+
+RTP.RTPClient.encode_packet = _patched_rtp_encode_packet
 
 from dotenv import load_dotenv
 
@@ -256,134 +303,180 @@ def stop_audio_bridge():
         audio_thread.join(timeout=2)
 
 
-async def _gemini_live_session(call, api_key):
-    model = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
-    endpoint = (
-        "wss://generativelanguage.googleapis.com/ws/"
-        "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
-        f"?key={api_key}"
-    )
-    async with websockets.connect(endpoint, max_size=None) as websocket:
-        print("[AI] Gemini Live session connected")
+async def _openai_realtime_session(call, api_key):
+    model = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
+    voice = os.getenv("OPENAI_REALTIME_VOICE", "alloy").strip()
+    try:
+        speed = float(os.getenv("OPENAI_REALTIME_SPEED", "1.0"))
+    except ValueError:
+        speed = 1.0
+    speed = min(1.5, max(0.25, speed))
+    endpoint = f"wss://api.openai.com/v1/realtime?model={model}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+    }
+    async with websockets.connect(
+        endpoint, additional_headers=headers, max_size=None
+    ) as websocket:
+        print("[AI] OpenAI Realtime session connected")
         await websocket.send(json.dumps({
-            "setup": {
-                "model": f"models/{model}",
-                "generationConfig": {
-                    "responseModalities": ["AUDIO"],
-                    "speechConfig": {
-                        "voiceConfig": {
-                            "prebuiltVoiceConfig": {"voiceName": "Kore"}
-                        }
+            "type": "session.update",
+            "session": {
+                "type": "realtime",
+                "model": model,
+                "output_modalities": ["audio"],
+                "instructions": (
+                    "You are Era, a helpful telephone assistant. "
+                    "Understand clear American English from a phone call. "
+                    "Do not guess or invent words. Wait until the caller "
+                    "finishes a complete sentence before answering. "
+                    "Use a warm, natural, calm telephone voice with clear "
+                    "pronunciation and short pauses. Speak clearly and keep "
+                    "responses brief. Answer the "
+                    "caller's actual question directly. If the audio is "
+                    "unclear, say you did not understand and ask them to "
+                    "repeat the question; never change the subject."
+                ),
+                "audio": {
+                    "input": {
+                        "format": {"type": "audio/pcm", "rate": 24000},
+                        "noise_reduction": {"type": "near_field"},
+                        "transcription": {
+                            "model": "gpt-4o-mini-transcribe",
+                            "language": "en",
+                            "prompt": (
+                                "Telephone support in American English. "
+                                "Important terms include TP-Link, router, "
+                                "reboot, restart, reset, power cycle, Wi-Fi, "
+                                "modem, and internet."
+                            ),
+                        },
+                        "turn_detection": {
+                            "type": "semantic_vad",
+                            "eagerness": "low",
+                            "create_response": True,
+                            "interrupt_response": False,
+                        },
+                    },
+                    "output": {
+                        "format": {"type": "audio/pcm", "rate": 24000},
+                        "voice": voice,
+                        "speed": speed,
                     },
                 },
-                "inputAudioTranscription": {},
-                "outputAudioTranscription": {},
-                "realtimeInputConfig": {
-                    "automaticActivityDetection": {
-                        "disabled": False,
-                        "startOfSpeechSensitivity": "START_SENSITIVITY_HIGH",
-                        "endOfSpeechSensitivity": "END_SENSITIVITY_LOW",
-                    }
-                },
-                "systemInstruction": {
-                    "parts": [{
-                        "text": "You are Era, a helpful telephone assistant. "
-                        "Speak clearly and keep responses brief. When asked "
-                        "to say the opening greeting, say exactly the provided "
-                        "words and do not paraphrase them."
-                    }]
-                },
-            }
+            },
         }))
-        setup_response = json.loads(await websocket.recv())
-        if "setupComplete" not in setup_response:
-            raise RuntimeError(f"Gemini setup failed: {setup_response}")
-        print("[AI] Gemini Live setup complete")
         await websocket.send(json.dumps({
-            "realtimeInput": {
-                "text": (
-                    "This is the opening greeting. Say exactly this sentence, "
-                    "with no additions or changes: " + GREETING
-                )
-            }
+            "type": "response.create",
+            "response": {
+                "output_modalities": ["audio"],
+                "instructions": "Say exactly this greeting: " + GREETING,
+            },
         }))
+
+        # Do not let audio left by a previous turn play into this session.
+        for rtp_client in call.RTPClients:
+            rtp_client.pmin = RTP.RTPPacketManager()
+            rtp_client.pmout = RTP.RTPPacketManager()
+
+        playback_queue = asyncio.Queue(maxsize=100)
+        playback_remainder = b""
+        agent_speaking = asyncio.Event()
+
+        async def play_agent_audio():
+            while call.state == CallState.ANSWERED:
+                pcm_chunk = await playback_queue.get()
+                agent_speaking.set()
+                await asyncio.to_thread(call.write_audio, pcm_chunk)
+                await asyncio.sleep(CHUNK / RATE)
+                if playback_queue.empty():
+                    agent_speaking.clear()
+
+        def clear_playback():
+            while True:
+                try:
+                    playback_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+            for rtp_client in call.RTPClients:
+                rtp_client.pmout = RTP.RTPPacketManager()
 
         async def send_caller_audio():
             rate_state = None
             audio_chunks = 0
-            voice_chunks = 0
             while call.state == CallState.ANSWERED:
                 pcm_8khz_unsigned = await asyncio.to_thread(
-                    call.read_audio, CHUNK, False
+                    call.read_audio, CHUNK, True
                 )
                 audio_chunks += 1
+                if agent_speaking.is_set():
+                    # Drain the RTP input while the agent speaks, but do not
+                    # feed handset/speaker echo back into the model.
+                    pcm_8khz_unsigned = b"\x80" * len(pcm_8khz_unsigned)
                 pcm_8khz_signed = audioop.bias(pcm_8khz_unsigned, 1, -128)
-                if audioop.rms(pcm_8khz_signed, 1) > 8:
-                    voice_chunks += 1
                 pcm_8khz_16bit = audioop.lin2lin(pcm_8khz_signed, 1, 2)
-                pcm_16khz, rate_state = audioop.ratecv(
-                    pcm_8khz_16bit, 2, 1, RATE, 16000, rate_state
+                pcm_24khz, rate_state = audioop.ratecv(
+                    pcm_8khz_16bit, 2, 1, RATE, 24000, rate_state
                 )
                 await websocket.send(json.dumps({
-                    "realtimeInput": {"audio": {
-                        "data": base64.b64encode(pcm_16khz).decode("ascii"),
-                        "mimeType": "audio/pcm;rate=16000",
-                    }}
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(pcm_24khz).decode("ascii"),
                 }))
                 if audio_chunks % 50 == 0:
-                    print(
-                        f"[AI] Caller RTP audio sent: {audio_chunks} chunks; "
-                        f"voice chunks: {voice_chunks}"
-                    )
-                await asyncio.sleep(CHUNK / RATE)
+                    print(f"[AI] Caller RTP audio sent: {audio_chunks} chunks")
 
         async def receive_agent_audio():
+            nonlocal playback_remainder
             rate_state = None
+            response_audio_active = False
             while call.state == CallState.ANSWERED:
                 message = json.loads(await websocket.recv())
-                server_content = message.get("serverContent", {})
-                if "inputTranscription" in server_content:
-                    print("[AI] Caller:", server_content["inputTranscription"].get("text", ""))
-                if "outputTranscription" in server_content:
-                    print("[AI] Agent:", server_content["outputTranscription"].get("text", ""))
-                if "error" in message:
-                    raise RuntimeError(f"Gemini error: {message['error']}")
-                for part in server_content.get(
-                    "modelTurn", {}
-                ).get("parts", []):
-                    inline_data = part.get("inline_data") or part.get("inlineData")
-                    if not inline_data:
-                        continue
-                    pcm_24khz = base64.b64decode(inline_data["data"])
+                event_type = message.get("type", "")
+                if event_type == "conversation.item.input_audio_transcription.completed":
+                    print("[AI] Caller:", message.get("transcript", ""))
+                elif event_type == "response.output_audio_transcript.done":
+                    print("[AI] Agent:", message.get("transcript", ""))
+                elif event_type == "error":
+                    raise RuntimeError(f"OpenAI error: {message.get('error')}")
+                elif event_type == "response.output_audio.delta":
+                    if not response_audio_active:
+                        # Each response is an independent PCM stream. Reusing
+                        # the previous resampler state causes boundary clicks.
+                        rate_state = None
+                        response_audio_active = True
+                    pcm_24khz = base64.b64decode(message["delta"])
                     pcm_8khz_16bit, rate_state = audioop.ratecv(
                         pcm_24khz, 2, 1, 24000, RATE, rate_state
                     )
                     pcm_8khz_signed = audioop.lin2lin(pcm_8khz_16bit, 2, 1)
                     pcm_8khz_unsigned = audioop.bias(pcm_8khz_signed, 1, 128)
-                    for offset in range(0, len(pcm_8khz_unsigned), CHUNK):
-                        if call.state != CallState.ANSWERED:
-                            return
-                        await asyncio.to_thread(
-                            call.write_audio,
-                            pcm_8khz_unsigned[offset:offset + CHUNK],
+                    playback_remainder += pcm_8khz_unsigned
+                    while len(playback_remainder) >= CHUNK:
+                        await playback_queue.put(playback_remainder[:CHUNK])
+                        playback_remainder = playback_remainder[CHUNK:]
+                elif event_type == "response.output_audio.done":
+                    if playback_remainder:
+                        await playback_queue.put(
+                            playback_remainder.ljust(CHUNK, b"\x80")
                         )
+                        playback_remainder = b""
+                    rate_state = None
+                    response_audio_active = False
 
-        await asyncio.gather(send_caller_audio(), receive_agent_audio())
+        await asyncio.gather(
+            send_caller_audio(), receive_agent_audio(), play_agent_audio()
+        )
 
 
-def start_gemini_agent(call):
-    api_key = (
-        os.getenv("GEMINI_API_KEY")
-        or os.getenv("GOOGLE_API_KEY")
-        or os.getenv("GOOGLE_AI_STUDIO_API_KEY")
-    )
+def start_openai_agent(call):
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("[AI] GEMINI_API_KEY is not configured; AI agent skipped")
+        print("[AI] OPENAI_API_KEY is not configured; AI agent skipped")
         return
     try:
-        asyncio.run(_gemini_live_session(call, api_key))
+        asyncio.run(_openai_realtime_session(call, api_key))
     except Exception as ex:
-        print("[AI] Live agent failed:", ex)
+        print("[AI] OpenAI Realtime agent failed:", ex)
 
 
 def answer_with_ai(call):
@@ -391,7 +484,7 @@ def answer_with_ai(call):
         call.answer()
         state["call_status"] = "AI agent connected"
         broadcast_status()
-        threading.Thread(target=start_gemini_agent, args=(call,), daemon=True).start()
+        threading.Thread(target=start_openai_agent, args=(call,), daemon=True).start()
     except InvalidStateError:
         return
     except Exception as ex:
@@ -415,6 +508,7 @@ def incoming_call_callback(call):
     state["call_status"] = "Ringing (incoming)"
     state["remote_uri"] = str(remote)
     broadcast_status()
+    threading.Thread(target=watch_call_end, args=(call,), daemon=True).start()
     threading.Thread(target=answer_with_ai, args=(call,), daemon=True).start()
 
 
@@ -428,6 +522,24 @@ class RegisterRequest(BaseModel):
 
 class DialRequest(BaseModel):
     number: str
+
+
+def watch_call_end(call):
+    global current_call
+    try:
+        while call.state != CallState.ENDED:
+            time.sleep(0.2)
+    except Exception as ex:
+        print("call state watcher error:", ex)
+        return
+
+    if current_call is not call:
+        return
+    stop_audio_bridge()
+    current_call = None
+    state["call_status"] = "Idle"
+    state["remote_uri"] = None
+    broadcast_status()
 
 
 def detect_local_ip(target_server: str) -> str:
@@ -526,12 +638,15 @@ def dial(req: DialRequest):
 
     def watch():
         try:
-            while current_call is not None and current_call.state in (CallState.DIALING, CallState.RINGING):
+            while call.state in (CallState.DIALING, CallState.RINGING):
                 time.sleep(0.2)
-            if current_call is not None and current_call.state == CallState.ANSWERED:
+            if call.state == CallState.ANSWERED:
                 state["call_status"] = "Connected"
                 broadcast_status()
-                start_audio_bridge(current_call)
+                start_audio_bridge(call)
+            threading.Thread(
+                target=watch_call_end, args=(call,), daemon=True
+            ).start()
         except Exception as e:
             print("watch error:", e)
 

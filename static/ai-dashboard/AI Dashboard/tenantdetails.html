@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tenant View · CNetVoIP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/tenantdetails.css">
+  <style>
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .password-wrapper input {
+      padding-right: 42px;
+    }
+    .toggle-password {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--mute);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 6px;
+    }
+    .toggle-password:hover {
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+<div id="dashboardView">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">C</div>
+      <div class="name">CNetVoIP<small style="color:#8A8FB8">TENANT VIEW</small></div>
+    </div>
+    <div class="sidebar-ext">
+      <div class="pulse-dot on"></div>
+      <div class="info" style="display:flex;flex-direction:column;gap:6px;">
+        <span>Tenant<b id="sideTenant">1000</b></span>
+        <span style="opacity:.65">Property<b id="sideProperty">PR-1001</b></span>
+      </div>
+    </div>
+
+    <nav class="nav" id="navList">
+      <button data-tab="registration" class="active">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="5" y="10" width="14" height="12" rx="2"/><circle cx="12" cy="16" r="1"/></svg>
+        Ext Registration
+      </button>
+      <button data-tab="hotel">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 21h18M6 21V7l6-4 6 4v14M9 9h1M9 13h1M14 9h1M14 13h1M10 21v-4h4v4"/></svg>
+        Hotel Details
+      </button>
+      <button data-tab="kb">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2 8 8 0 0 0-8 8 8 8 0 0 0 8 8Z"/><path d="M12 20a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2 8 8 0 0 1 8 8 8 8 0 0 1-8 8Z"/></svg>
+        Knowledge Base
+      </button>
+      <button data-tab="logs">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+        Call Logs
+      </button>
+      <div class="divider"></div>
+      <button data-tab="close" onclick="window.close()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        Close View
+      </button>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="topHotelName">ABC Hotel</h1>
+        <div class="sub">Tenant ID <span id="topTenant">1000</span> · Property <span id="topProperty">PR-1001</span> · Owner <span id="topOwner">John Doe</span></div>
+      </div>
+      <div class="topbar-right">
+        <div class="live-pill"><div class="pulse-dot on"></div>OPERATOR MANAGE VIEW</div>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- EXTENSION REGISTRATION TAB -->
+      <div class="tab-panel active" data-panel="registration">
+        <div class="card">
+          <h2>Create &amp; Register AI Extension</h2>
+          <div class="desc">Enter SIP credentials and server details to create and provision a live AI receptionist extension.</div>
+
+          <div class="grid2">
+            <div class="field-block">
+              <label for="regExtNumber">Extension Number</label>
+              <input type="text" id="regExtNumber" placeholder="e.g. 501" value="501" />
+            </div>
+
+            <div class="field-block">
+              <label for="regExtPassword">Extension Password</label>
+              <div class="password-wrapper">
+                <input type="password" id="regExtPassword" placeholder="Enter SIP password" value="sip@password123" />
+                <button type="button" class="toggle-password" onclick="togglePassword('regExtPassword', this)" aria-label="Toggle password visibility">
+                  <svg class="eye-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="eye-off-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none;">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="field-block">
+              <label for="regExtProtocol">Extension Protocol</label>
+              <select id="regExtProtocol">
+                <option value="TCP">TCP</option>
+                <option value="UDP" selected>UDP</option>
+              </select>
+            </div>
+
+            <div class="field-block">
+              <label for="regServerUrl">Server URL</label>
+              <input type="text" id="regServerUrl" placeholder="e.g. core.cnetvoip.cloud" value="core.cnetvoip.cloud" />
+            </div>
+
+            <div class="field-block full" style="display:flex;align-items:center;gap:14px;margin-top:10px;">
+              <button class="btn-solid" onclick="saveExtensionRegistration()">Save &amp; Register AI Extension</button>
+              <span id="regSavedNote" style="font-size:12.5px;color:var(--signal);font-weight:600;opacity:0;transition:.3s;">Registered Successfully</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOTEL DETAILS TAB -->
+      <div class="tab-panel" data-panel="hotel">
+        <div class="card">
+          <h2>Property &amp; Hotel Details</h2>
+          <div class="desc">View and manage information provisioned for this tenant.</div>
+
+          <div class="grid2">
+            <div class="field-block">
+              <label for="vTenant">Tenant ID</label>
+              <input type="text" id="vTenant" readonly style="color:var(--mute);background:#F1F2F8;" />
+            </div>
+            <div class="field-block">
+              <label for="vProperty">Property No</label>
+              <input type="text" id="vProperty" />
+            </div>
+            <div class="field-block">
+              <label for="vHotel">Hotel Name</label>
+              <input type="text" id="vHotel" />
+            </div>
+            <div class="field-block">
+              <label for="vOwner">Owner Name</label>
+              <input type="text" id="vOwner" />
+            </div>
+            <div class="field-block full">
+              <label for="vAddress">Hotel Address</label>
+              <textarea id="vAddress"></textarea>
+            </div>
+            <div class="field-block full" style="display:flex;align-items:center;gap:14px;margin-top:10px;">
+              <button class="btn-solid" onclick="saveHotelDetails()">Save Hotel Details</button>
+              <span id="hotelSavedNote" style="font-size:12.5px;color:var(--signal);font-weight:600;opacity:0;transition:.3s;">Saved</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KNOWLEDGE BASE TAB -->
+      <div class="tab-panel" data-panel="kb">
+        <div class="card">
+          <h2>AI Knowledge Base</h2>
+          <div class="desc">Questions and automated responses configured for this hotel.</div>
+          <div class="kb-list">
+            <div class="kb-item">
+              <div>
+                <div class="q">What is check-in time?</div>
+                <div class="a">Check-in starts at 2:00 PM.</div>
+              </div>
+            </div>
+            <div class="kb-item">
+              <div>
+                <div class="q">Do you provide free Wi-Fi?</div>
+                <div class="a">Yes, free Wi-Fi is available in all rooms and public areas.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CALL LOGS TAB -->
+      <div class="tab-panel" data-panel="logs">
+        <div class="card">
+          <h2>Call Logs</h2>
+          <div class="desc">Recent activity on this extension line.</div>
+          <table class="logs">
+            <thead>
+              <tr><th>Time</th><th>Caller</th><th>Intent</th><th>Duration</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>09:14 AM</td><td class="caller">+1 646 555 0912</td><td><span class="tag transfer">transfer</span></td><td>0:42</td><td><span class="status-chip completed">completed</span></td></tr>
+              <tr><td>09:47 AM</td><td class="caller">+1 917 555 0134</td><td><span class="tag lookup">lookup</span></td><td>0:28</td><td><span class="status-chip completed">completed</span></td></tr>
+              <tr><td>10:22 AM</td><td class="caller">+1 332 555 0087</td><td><span class="tag ticket">ticket</span></td><td>1:05</td><td><span class="status-chip escalated">escalated</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="js/shared.js"></script>
+<script src="js/tenantdetails.js"></script>
+</body>
+</html>

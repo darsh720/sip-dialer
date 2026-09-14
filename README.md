@@ -33,6 +33,19 @@ password, and your Asterisk server IP, hit **Register** — this is
 dynamic, register a different extension any time by resubmitting
 the form.
 
+### OpenAI voice settings
+
+The voice can be changed in `.env` without editing Python:
+
+```dotenv
+OPENAI_REALTIME_VOICE=alloy
+OPENAI_REALTIME_SPEED=1.0
+```
+
+Available built-in voices include `alloy`, `ash`, `ballad`, `coral`,
+`echo`, `sage`, `shimmer`, `verse`, `marin`, and `cedar`. `alloy`,
+`marin`, and `cedar` are good starting points for telephone speech.
+
 Nothing needs to change on the Asterisk side — a normal PJSIP/chan_sip
 extension configured for plain UDP already works, exactly like it
 does for MicroSIP or Zoiper.

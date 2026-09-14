@@ -1,0 +1,353 @@
+/* Contains styles strictly for hotellogin.html and adminlogin.html 
+(the connect view, dual-panel console layout, terminal box, input fields, and login buttons). */
+
+#connectView {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(46, 37, 153, 0.55), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(0, 217, 163, 0.12), transparent 40%),
+    var(--ink);
+  padding: 32px 20px;
+  box-sizing: border-box;
+}
+
+.console {
+  width: 100%;
+  max-width: 960px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.console-left {
+  padding: 40px 36px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #FAFAFE, transparent);
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.brand .mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--signal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.brand .name {
+  font-family: var(--display);
+  font-weight: 600;
+  color: var(--text);
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+.brand .name small {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--mute);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+
+.console-left h1 {
+  font-family: var(--display);
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.console-left p {
+  color: var(--mute);
+  font-size: 14.5px;
+  line-height: 1.6;
+  max-width: 340px;
+}
+
+.status-pill {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #F3F4FA;
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  border-radius: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.status-pill .txt {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.status-pill .txt b {
+  color: #036B52;
+}
+
+.status-pill.off .txt b {
+  color: var(--danger);
+}
+
+.terminal {
+  margin-top: 20px;
+  background: #0F1020;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  height: 140px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.75;
+  color: #8FE6C9;
+}
+
+.terminal .t {
+  color: #8A8FB8;
+}
+
+.terminal .line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.console-right {
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--surface);
+}
+
+.field label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin-bottom: 7px;
+}
+
+.field input {
+  width: 100%;
+  padding: 12px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #FBFBFE;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  outline: none;
+  transition: 0.2s;
+  box-sizing: border-box;
+}
+
+.field input:read-only {
+  color: var(--mute);
+  background: #F1F2F8;
+}
+
+.field input:focus {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px rgba(0, 217, 163, 0.14);
+  background: #fff;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: 0.15s;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--signal);
+  color: #03231B;
+}
+
+.btn-primary:hover {
+  background: #00c493;
+}
+
+.btn-primary:disabled {
+  background: #D6D9EA;
+  color: #8A8FA6;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: #F3F4FA;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.btn-ghost:hover {
+  background: #EAEBF5;
+}
+
+.console-foot {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--mute);
+  margin-top: 12px;
+}
+
+/* Password wrapper & visibility toggle button */
+.console-right-centered {
+  justify-content: center;
+}
+
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  padding-right: 42px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+
+.toggle-password:hover {
+  color: var(--text);
+}
+
+
+/* ================= RESPONSIVE MEDIA QUERIES ================= */
+
+/* Tablets & Small Laptops (max-width: 860px) */
+@media (max-width: 860px) {
+  #connectView {
+    padding: 20px 12px;
+  }
+
+  .console {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+    border-radius: 20px;
+  }
+
+  .console-left {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 28px 24px;
+  }
+
+  .console-right {
+    padding: 28px 24px;
+  }
+
+  .console-left h1 {
+    font-size: 26px;
+  }
+}
+
+/* Mobile Devices (max-width: 480px) */
+@media (max-width: 480px) {
+  #connectView {
+    padding: 12px 8px;
+    align-items: flex-start;
+  }
+
+  .console {
+    border-radius: 16px;
+  }
+
+  .console-left, .console-right {
+    padding: 20px 16px;
+  }
+
+  .brand {
+    margin-bottom: 20px;
+  }
+
+  .console-left h1 {
+    font-size: 22px;
+  }
+
+  .console-left p {
+    font-size: 13.5px;
+  }
+
+  .btn-row {
+    flex-direction: column;
+  }
+
+  .terminal {
+    height: 110px;
+    font-size: 11px;
+  }
+
+  .field input {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+
+  .btn {
+    padding: 12px;
+    font-size: 13px;
+  }
+}
