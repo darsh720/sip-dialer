@@ -1094,3 +1094,8 @@ table.logs tr:last-child td {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.live-pill.offline {
+  background: var(--danger-dim);
+  color: var(--danger);
+}

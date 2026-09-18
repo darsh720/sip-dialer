@@ -2,19 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../style/connect.css';
 
-const STORAGE_KEY = 'cnv_ai_extension_state_v2';
-
 export default function HotelLogin() {
   const navigate = useNavigate();
 
-  const [phone, setPhone] = useState('+1 408 555 1001');
-  const [password, setPassword] = useState('password@123');
+  const [server, setServer] = useState('');
+  const [extension, setExtension] = useState('');
+  const [tenantId, setTenantId] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
-
-  const [extension] = useState('510');
-  const [tenantId] = useState('TEN-0049');
 
   const [logs, setLogs] = useState([
     'AI extension initialized',
@@ -35,71 +32,46 @@ export default function HotelLogin() {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const handleConnect = (e) => {
+  const handleConnect = async (e) => {
     e.preventDefault();
 
-    if (!phone.trim() || !password.trim()) {
-      addLog('Registration rejected — Phone No and SIP Password are required');
+    if (!server.trim() || !extension.trim() || !tenantId.trim() || !password.trim()) {
+      addLog('Registration rejected — Tenant ID, extension, SIP server, and password are required');
       return;
     }
 
     setIsConnecting(true);
-    addLog(`Authenticating phone number ${phone.trim()}…`);
-    addLog('SIP REGISTER sent to core.cnetvoip.cloud');
-
-    setTimeout(() => {
-      setIsConnecting(false);
+    addLog(`Sending SIP REGISTER for tenant ${tenantId.trim()}…`);
+    try {
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: tenantId.trim(),
+          extension: extension.trim(),
+          password,
+          server: server.trim(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Registration failed');
       setIsOnline(true);
-      addLog('Registration successful');
-      addLog(`Extension ${extension} is ONLINE for ${phone.trim()}`);
-      addLog('Opening AI dashboard…');
-
-      const raw = localStorage.getItem(STORAGE_KEY);
-      let existing = {};
-      if (raw) {
-        try {
-          existing = JSON.parse(raw);
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          ...existing,
-          connected: true,
-          tenantId,
-          extension,
-          hotel: {
-            ...(existing.hotel || {}),
-            did: phone.trim()
-          }
-        })
-      );
-
-      setTimeout(() => {
-        navigate('/hotel-dashboard');
-      }, 900);
-    }, 1000);
+      addLog('Registration successful — keep-alive active');
+      navigate('/hotel-dashboard');
+    } catch (error) {
+      addLog(`Registration failed — ${error.message}`);
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const handleDisconnect = () => {
     setIsOnline(false);
     setIsConnecting(false);
     addLog('Disconnect signal sent');
-    addLog(`Extension ${extension} unregistered — now OFFLINE`);
-
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        parsed.connected = false;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      } catch (err) {
-        console.error(err);
-      }
-    }
+    fetch('/api/unregister', { method: 'POST' })
+      .then(() => addLog(`Extension ${extension || 'unknown'} unregistered — now OFFLINE`))
+      .catch((error) => addLog(`Unregister failed — ${error.message}`));
   };
 
   return (
@@ -127,7 +99,7 @@ export default function HotelLogin() {
             <div className={`status-pill ${isOnline ? 'on' : 'off'}`} id="statusPill">
               <div className={`pulse-dot ${isOnline ? 'on' : ''}`} id="pulseDot"></div>
               <div className="txt">
-                Tenant <b>{tenantId}</b> · Extension <b>{extension}</b> is{' '}
+                Tenant <b>{tenantId || '—'}</b> · Extension <b>{extension || '—'}</b> is{' '}
                 <b>{isOnline ? 'ONLINE' : 'OFFLINE'}</b>
               </div>
             </div>
@@ -155,15 +127,25 @@ export default function HotelLogin() {
         <div className="console-right console-right-centered">
           <form onSubmit={handleConnect} style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
             <div className="field">
-              <label htmlFor="inPhone">Phone No</label>
+              <label htmlFor="inTenant">Tenant ID</label>
               <input
-                type="tel"
-                id="inPhone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="e.g. +1 408 555 1001"
+                type="text"
+                id="inTenant"
+                value={tenantId}
+                onChange={(e) => setTenantId(e.target.value)}
+                placeholder="Enter tenant ID"
                 required
               />
+            </div>
+
+            <div className="field">
+              <label htmlFor="inExtension">SIP Extension</label>
+              <input id="inExtension" value={extension} onChange={(e) => setExtension(e.target.value)} placeholder="Enter extension" required />
+            </div>
+
+            <div className="field">
+              <label htmlFor="inServer">SIP Server</label>
+              <input id="inServer" value={server} onChange={(e) => setServer(e.target.value)} placeholder="e.g. 192.168.1.10" required />
             </div>
 
             <div className="field">

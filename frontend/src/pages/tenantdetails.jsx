@@ -1,53 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import '../style/tenantdetails.css';
-import { DEPARTMENT_LIST, defaultHotelProfile, normalizeHotelProfile } from '../lib/hotelProfile';
-
-const ADMIN_STORAGE_KEY = 'cnv_admin_platform_state_v2';
+import { DEPARTMENT_LIST, normalizeHotelProfile } from '../lib/hotelProfile';
 
 const createDefaultHotelForm = (tenantId, hotelQuery) =>
   normalizeHotelProfile({
     id: tenantId,
     hotel: hotelQuery,
-    propertyNo: 'PR-1001',
-    ownerName: 'John Doe',
-    address: '123 Main Street, New York, NY',
+    propertyNo: '',
+    ownerName: '',
+    address: '',
     propertyName: hotelQuery,
-    propertyAddress: '123 Main Street, New York, NY',
-    propertyPhoneNumber: '+1 (212) 555-0147',
-    propertyFaxNumber: '+1 (212) 555-0148',
-    propertyCheckInTime: '2:00 PM',
-    propertyCheckOutTime: '11:00 AM',
-    lateCheckoutPolicy: 'Subject to availability after 11:00 AM for a fee.',
-    cancellationPolicy: 'Free cancellation up to 48 hours before arrival.',
-    roomTypes: ['Standard Room', 'Deluxe Suite'],
-    smokingRoom: 'No',
-    petPolicy: 'No',
-    parkingPolicy: 'Yes',
-    parkingFee: '15',
-    nearbyLocation: 'Downtown shopping district, 5 minutes walk to train station',
-    breakfast: 'Yes',
-    lunch: 'Yes',
-    dinner: 'Yes',
-    breakfastTime: '7:00 AM - 10:30 AM',
-    lunchTime: '12:30 PM - 2:30 PM',
-    dinnerTime: '6:30 PM - 9:30 PM',
-    bookingAmount: 'Yes',
-    bookingAmountValue: '120',
-    roomType: 'AC',
-    hotelAmenities: ['WiFi', 'Fitness Center', 'Pool'],
-    fitness: 'Yes',
-    fitnessHours: '6:00 AM - 10:00 PM',
-    pool: 'Yes',
-    poolHours: '7:00 AM - 9:00 PM',
-    guestWifiPassword: 'hotel@2026',
-    housekeepingHours: '9:00 AM - 6:00 PM',
+    propertyAddress: '',
   });
 
 export default function TenantDetails() {
   const [searchParams] = useSearchParams();
-  const tenantId = searchParams.get('tenant') || '1001';
-  const hotelQuery = searchParams.get('hotel') || 'ABC Hotel';
+  const tenantId = searchParams.get('tenant') || '';
+  const hotelQuery = searchParams.get('hotel') || '';
 
   const [activeTab, setActiveTab] = useState('registration');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -58,77 +28,93 @@ export default function TenantDetails() {
   };
 
   // Extension Registration Form State
-  const [extForm, setExtForm] = useState({
-    number: '501',
-    password: 'sip@password123',
-    protocol: 'UDP',
-    serverUrl: 'core.cnetvoip.cloud',
+  const [extForm, setExtForm] = useState(() => {
+    let password = 'sip@password123';
+    try {
+      password = window.sessionStorage.getItem(`sip-password-${tenantId}`) || password;
+    } catch {
+      // Browser storage may be unavailable in restricted browsing modes.
+    }
+    return {
+      number: '501',
+      password,
+      protocol: 'UDP',
+      serverUrl: 'core.cnetvoip.cloud',
+    };
   });
   const [showExtPassword, setShowExtPassword] = useState(false);
   const [extSaved, setExtSaved] = useState(false);
   const [extSaving, setExtSaving] = useState(false);
   const [extError, setExtError] = useState('');
+  const [registrationStatus, setRegistrationStatus] = useState({
+    registered: false,
+    status: 'Not registered',
+    lastSeen: null,
+  });
+  const [unregistering, setUnregistering] = useState(false);
 
   // Hotel Details Form State
   const [hotelForm, setHotelForm] = useState(() => createDefaultHotelForm(tenantId, hotelQuery));
   const [hotelSaved, setHotelSaved] = useState(false);
+  const [hotelSaving, setHotelSaving] = useState(false);
+  const [hotelError, setHotelError] = useState('');
 
   // In-Page AI Knowledge Base View Mode
   const [kbViewMode, setKbViewMode] = useState('graphical'); // 'graphical' | 'json'
   const [jsonCopied, setJsonCopied] = useState(false);
 
-  // Load tenant information from storage and sync active profile to backend
+  // Load tenant information from the database-backed API.
   useEffect(() => {
-    const syncProfileToBackend = (profileToSync) => {
-      fetch('/api/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: tenantId, hotel_profile: profileToSync }),
-      }).catch((err) => console.error('Could not sync hotel profile to backend', err));
-    };
-
-    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.tenants)) {
-          const match = parsed.tenants.find((t) => String(t.id) === String(tenantId));
-          if (match) {
-            const normalized = normalizeHotelProfile({
-              ...defaultHotelProfile,
-              ...match,
-              ...match.hotelProfile,
-              id: match.id,
-              hotel: match.hotel || hotelQuery,
-              propertyNo: match.propertyNo || 'PR-1001',
-              ownerName: match.ownerName || 'John Doe',
-              address: match.address || match.propertyAddress || '123 Main Street, New York, NY',
-              propertyName: match.propertyName || match.hotel || hotelQuery,
-              propertyAddress: match.propertyAddress || match.address || '123 Main Street, New York, NY',
-            });
-            setHotelForm(normalized);
-            syncProfileToBackend(normalized);
-            return;
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    fetch('/api/profile')
+    const profileUrl = `/api/profile?tenant_id=${encodeURIComponent(tenantId)}`;
+    fetch(profileUrl)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.hotel_profile && Object.keys(data.hotel_profile).length > 0) {
           setHotelForm((prev) => normalizeHotelProfile({ ...prev, ...data.hotel_profile }));
-        } else {
-          syncProfileToBackend(hotelForm);
+        }
+        if (data?.registration) {
+          setExtForm((prev) => ({
+            ...prev,
+            number: data.registration.extension || prev.number,
+            serverUrl: data.registration.server || prev.serverUrl,
+          }));
         }
       })
-      .catch(() => {
-        syncProfileToBackend(hotelForm);
-      });
+      .catch((err) => console.error('Could not load tenant profile', err));
   }, [tenantId, hotelQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRegistrationStatus = () => {
+      fetch('/api/status')
+        .then((response) => (response.ok ? response.json() : null))
+        .then((status) => {
+          if (cancelled || !status) return;
+          const isCurrentTenant = status.tenant_id === tenantId;
+          setRegistrationStatus({
+            registered: Boolean(status.registered && isCurrentTenant),
+            status: isCurrentTenant ? status.reg_status || 'Not registered' : 'Not registered',
+            lastSeen: isCurrentTenant ? status.registration_last_seen : null,
+          });
+          if (isCurrentTenant) {
+            setExtForm((previous) => ({
+              ...previous,
+              number: status.extension || previous.number,
+              serverUrl: status.server ? status.server.split(':')[0] : previous.serverUrl,
+            }));
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadRegistrationStatus();
+    const timer = window.setInterval(loadRegistrationStatus, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [tenantId]);
 
   const handleSaveExtension = async (e) => {
     e.preventDefault();
@@ -141,6 +127,16 @@ export default function TenantDetails() {
     setExtSaved(false);
 
     try {
+      const normalized = normalizeHotelProfile({
+        ...hotelForm,
+        id: tenantId,
+        hotel: hotelForm.hotel || hotelForm.propertyName || '',
+        propertyName: hotelForm.propertyName || hotelForm.hotel || '',
+        propertyAddress: hotelForm.propertyAddress || hotelForm.address || '',
+        address: hotelForm.address || hotelForm.propertyAddress || '',
+      });
+      setHotelForm(normalized);
+
       const response = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,7 +146,7 @@ export default function TenantDetails() {
           server: extForm.serverUrl.trim(),
           port: 5060,
           tenant_id: tenantId,
-          hotel_profile: hotelForm,
+          hotel_profile: normalized,
         }),
       });
       const result = await response.json();
@@ -159,7 +155,17 @@ export default function TenantDetails() {
         throw new Error(result.error || 'The AI extension could not be registered.');
       }
 
+      try {
+        window.sessionStorage.setItem(`sip-password-${tenantId}`, extForm.password);
+      } catch {
+        // Browser storage may be unavailable in restricted browsing modes.
+      }
       setExtSaved(true);
+      setRegistrationStatus({
+        registered: true,
+        status: result.status || 'Registered / keep-alive active',
+        lastSeen: Date.now() / 1000,
+      });
       setTimeout(() => setExtSaved(false), 3000);
     } catch (err) {
       setExtError(err.message || 'The AI extension could not be registered.');
@@ -168,14 +174,40 @@ export default function TenantDetails() {
     }
   };
 
-  const handleSaveHotel = (e) => {
+  const handleUnregister = async () => {
+    setUnregistering(true);
+    setExtError('');
+    try {
+      const response = await fetch('/api/unregister', { method: 'POST' });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'The AI extension could not be unregistered.');
+      }
+      try {
+        window.sessionStorage.removeItem(`sip-password-${tenantId}`);
+      } catch {
+        // Browser storage may be unavailable in restricted browsing modes.
+      }
+      setRegistrationStatus({ registered: false, status: 'Unregistered', lastSeen: null });
+    } catch (err) {
+      setExtError(err.message || 'The AI extension could not be unregistered.');
+    } finally {
+      setUnregistering(false);
+    }
+  };
+
+  const lastSeenLabel = registrationStatus.lastSeen
+    ? new Date(registrationStatus.lastSeen * 1000).toLocaleTimeString()
+    : 'Not available';
+
+  const handleSaveHotel = async (e) => {
     e.preventDefault();
 
     const normalized = normalizeHotelProfile({
       ...hotelForm,
       id: tenantId,
-      hotel: hotelForm.hotel || hotelForm.propertyName || hotelQuery,
-      propertyName: hotelForm.propertyName || hotelForm.hotel || hotelQuery,
+      hotel: hotelForm.hotel || hotelForm.propertyName || '',
+      propertyName: hotelForm.propertyName || hotelForm.hotel || '',
       propertyAddress: hotelForm.propertyAddress || hotelForm.address || '',
       address: hotelForm.address || hotelForm.propertyAddress || '',
       roomTypes: Array.isArray(hotelForm.roomTypes)
@@ -192,70 +224,26 @@ export default function TenantDetails() {
             .filter(Boolean),
     });
 
-    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.tenants)) {
-          parsed.tenants = parsed.tenants.map((t) =>
-            String(t.id) === String(tenantId)
-              ? {
-                  ...t,
-                  id: tenantId,
-                  hotel: normalized.hotel,
-                  propertyNo: normalized.propertyNo,
-                  ownerName: normalized.ownerName,
-                  address: normalized.propertyAddress || normalized.address,
-                  propertyName: normalized.propertyName,
-                  propertyAddress: normalized.propertyAddress,
-                  propertyPhoneNumber: normalized.propertyPhoneNumber,
-                  propertyFaxNumber: normalized.propertyFaxNumber,
-                  propertyCheckInTime: normalized.propertyCheckInTime,
-                  propertyCheckOutTime: normalized.propertyCheckOutTime,
-                  lateCheckoutPolicy: normalized.lateCheckoutPolicy,
-                  cancellationPolicy: normalized.cancellationPolicy,
-                  roomTypes: normalized.roomTypes,
-                  smokingRoom: normalized.smokingRoom,
-                  petPolicy: normalized.petPolicy,
-                  parkingPolicy: normalized.parkingPolicy,
-                  parkingFee: normalized.parkingFee,
-                  nearbyLocation: normalized.nearbyLocation,
-                  breakfast: normalized.breakfast,
-                  lunch: normalized.lunch,
-                  dinner: normalized.dinner,
-                  breakfastTime: normalized.breakfastTime,
-                  lunchTime: normalized.lunchTime,
-                  dinnerTime: normalized.dinnerTime,
-                  bookingAmount: normalized.bookingAmount,
-                  bookingAmountValue: normalized.bookingAmountValue,
-                  roomType: normalized.roomType,
-                  hotelAmenities: normalized.hotelAmenities,
-                  fitness: normalized.fitness,
-                  fitnessHours: normalized.fitnessHours,
-                  pool: normalized.pool,
-                  poolHours: normalized.poolHours,
-                  guestWifiPassword: normalized.guestWifiPassword,
-                  housekeepingHours: normalized.housekeepingHours,
-                  departmentExtensions: normalized.departmentExtensions,
-                  hotelProfile: normalized,
-                }
-              : t
-          );
-          localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(parsed));
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
     setHotelForm(normalized);
-    fetch('/api/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenant_id: tenantId, hotel_profile: normalized }),
-    }).catch((err) => console.error('Could not update active AI profile', err));
-    setHotelSaved(true);
-    setTimeout(() => setHotelSaved(false), 2000);
+    setHotelSaving(true);
+    setHotelError('');
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: tenantId, hotel_profile: normalized }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'Hotel details could not be saved.');
+      }
+      setHotelSaved(true);
+      setTimeout(() => setHotelSaved(false), 2000);
+    } catch (err) {
+      setHotelError(err.message || 'Hotel details could not be saved.');
+    } finally {
+      setHotelSaving(false);
+    }
   };
 
   // Compile real live dynamic payload strictly from Hotel & Property details
@@ -540,11 +528,30 @@ export default function TenantDetails() {
 
                 <div
                   className="field-block full"
-                  style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px', flexWrap: 'wrap' }}
                 >
                   <button type="submit" className="btn-solid" disabled={extSaving}>
                     {extSaving ? 'Registering...' : 'Save & Register AI Extension'}
                   </button>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={handleUnregister}
+                    disabled={unregistering || !registrationStatus.registered}
+                  >
+                    {unregistering ? 'Unregistering...' : 'Unregister'}
+                  </button>
+                  <span
+                    style={{
+                      fontSize: '12.5px',
+                      color: registrationStatus.registered ? '#036B52' : 'var(--mute)',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {registrationStatus.registered ? 'Keep-alive active' : registrationStatus.status}
+                    {' · Last seen: '}
+                    {lastSeenLabel}
+                  </span>
                   <span
                     style={{
                       fontSize: '12.5px',
@@ -986,8 +993,8 @@ export default function TenantDetails() {
                   className="field-block full"
                   style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px' }}
                 >
-                  <button type="submit" className="btn-solid">
-                    Save Hotel Details
+                  <button type="submit" className="btn-solid" disabled={hotelSaving}>
+                    {hotelSaving ? 'Saving...' : 'Save Hotel Details'}
                   </button>
                   <span
                     style={{
@@ -1000,6 +1007,11 @@ export default function TenantDetails() {
                   >
                     Saved
                   </span>
+                  {hotelError && (
+                    <span style={{ fontSize: '12.5px', color: '#d95c5c', fontWeight: 600 }}>
+                      {hotelError}
+                    </span>
+                  )}
                 </div>
               </form>
             </div>

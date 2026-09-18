@@ -4,84 +4,35 @@ import '../style/hoteldashboard.css';
 import { DEPARTMENT_LIST, defaultHotelProfile } from '../lib/hotelProfile';
 import AiKnowledgeModal from './aiknowledge';
 
-const DEFAULT_STATE = {
-  connected: true,
-  tenantId: 'TEN-0049',
-  extension: '510',
+const EMPTY_STATE = {
+  connected: false,
+  tenantId: '',
+  extension: '',
   hotel: {
-    name: 'ABC Hotel',
-    did: '+1 408 555 1001',
-    frontExt: '501',
-    tz: 'America/New_York',
-    address: '123 Main Street, New York, USA',
-    greeting: 'Welcome to ABC Hotel. How may I help you today?',
-    lang: 'English',
-    fallback: '501',
-    departmentExtensions: {
-      ...defaultHotelProfile.departmentExtensions,
-      frontDesk: '501',
-    },
+    name: '', did: '', frontExt: '', tz: '', address: '', greeting: '', lang: '', fallback: '',
+    departmentExtensions: { ...defaultHotelProfile.departmentExtensions },
   },
-  kb: [
-    { q: 'What is check-in time?', a: 'Check-in starts at 2:00 PM.' },
-    { q: 'Do you provide free Wi-Fi?', a: 'Yes, free Wi-Fi is available in all rooms.' },
-  ],
-  logs: [
-    { time: '09:14 AM', caller: '+1 646 555 0912', intent: 'transfer', duration: '0:42', status: 'completed' },
-    { time: '09:47 AM', caller: '+1 917 555 0134', intent: 'lookup', duration: '0:28', status: 'completed' },
-    { time: '10:22 AM', caller: '+1 332 555 0087', intent: 'ticket', duration: '1:05', status: 'escalated' },
-    { time: '11:03 AM', caller: '+1 718 555 0221', intent: 'lookup', duration: '0:19', status: 'completed' },
-    { time: '11:40 AM', caller: '+1 212 555 0399', intent: 'transfer', duration: '0:00', status: 'missed' },
-  ],
-  settings: {
-    greeting: true,
-    autoTransfer: true,
-    sms: true,
-    email: false,
-    voice: 'Warm Female — Aria',
-    retries: 2,
-  },
+  kb: [],
+  logs: [],
+  settings: { greeting: false, autoTransfer: false, sms: false, email: false, voice: '', retries: 0 },
+  registrationStatus: 'Not registered',
+  registrationLastSeen: null,
 };
-
-const STORAGE_KEY = 'cnv_ai_extension_state_v2';
 
 export default function HotelDashboard() {
   const navigate = useNavigate();
 
-  // Load state from localStorage or fallback to default
-  const [data, setData] = useState(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        return {
-          ...DEFAULT_STATE,
-          ...parsed,
-          hotel: {
-            ...DEFAULT_STATE.hotel,
-            ...(parsed.hotel || {}),
-            departmentExtensions: {
-              ...DEFAULT_STATE.hotel.departmentExtensions,
-              ...((parsed.hotel && parsed.hotel.departmentExtensions) || {}),
-            },
-          },
-        };
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return DEFAULT_STATE;
-  });
+  const [data, setData] = useState(EMPTY_STATE);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Form states
   const [hotelForm, setHotelForm] = useState(() => ({
-    ...DEFAULT_STATE.hotel,
+    ...EMPTY_STATE.hotel,
     ...data.hotel,
     departmentExtensions: {
-      ...DEFAULT_STATE.hotel.departmentExtensions,
+      ...EMPTY_STATE.hotel.departmentExtensions,
       ...(data.hotel?.departmentExtensions || {}),
       ...(data.hotel?.frontExt ? { frontDesk: data.hotel.frontExt } : {}),
     },
@@ -101,7 +52,7 @@ export default function HotelDashboard() {
   const [logFilter, setLogFilter] = useState('all');
 
   // Sync profile to backend helper
-  const syncProfileToBackend = (hForm) => {
+  const syncProfileToBackend = (hForm, knowledgeBase = data.kb) => {
     const deptExts = {
       ...defaultHotelProfile.departmentExtensions,
       ...(hForm.departmentExtensions || {}),
@@ -113,6 +64,7 @@ export default function HotelDashboard() {
       body: JSON.stringify({
         tenant_id: data.tenantId,
         hotel_profile: {
+          ...hForm,
           propertyName: hForm.name,
           hotel: hForm.name,
           propertyPhoneNumber: hForm.did,
@@ -120,18 +72,62 @@ export default function HotelDashboard() {
           address: hForm.address,
           greeting: hForm.greeting,
           departmentExtensions: deptExts,
+          knowledge_base: knowledgeBase,
         },
       }),
     }).catch((err) => console.error('Could not sync hotel profile to backend', err));
   };
 
-  // Sync back to localStorage and backend on update
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
+    let cancelled = false;
+    Promise.all([fetch('/api/profile'), fetch('/api/status')])
+      .then(async ([profileResponse, statusResponse]) => {
+        const profile = await profileResponse.json();
+        const status = await statusResponse.json();
+        if (cancelled) return;
+        const saved = profile.hotel_profile || {};
+        const hotel = {
+          ...EMPTY_STATE.hotel,
+          name: saved.propertyName || saved.hotel || '',
+          did: saved.propertyPhoneNumber || '',
+          address: saved.propertyAddress || saved.address || '',
+          greeting: saved.greeting || '',
+          departmentExtensions: { ...EMPTY_STATE.hotel.departmentExtensions, ...(saved.departmentExtensions || {}) },
+          frontExt: saved.departmentExtensions?.frontDesk || '',
+          tz: saved.tz || '',
+          lang: saved.lang || '',
+          fallback: saved.fallback || '',
+        };
+        setData((previous) => ({
+          ...previous,
+          tenantId: profile.tenant_id || status.tenant_id || '',
+          extension: status.extension || '',
+          hotel,
+          kb: saved.knowledge_base || [],
+          connected: Boolean(status.registered),
+          registrationStatus: status.reg_status || 'Not registered',
+          registrationLastSeen: status.registration_last_seen,
+        }));
+        setHotelForm(hotel);
+      })
+      .catch((error) => console.error('Could not load dashboard data', error));
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
-    syncProfileToBackend(hotelForm);
+    const timer = window.setInterval(() => {
+      fetch('/api/status')
+        .then((response) => response.json())
+        .then((status) => setData((previous) => ({
+          ...previous,
+          connected: Boolean(status.registered),
+          extension: status.extension || previous.extension,
+          registrationStatus: status.reg_status || previous.registrationStatus,
+          registrationLastSeen: status.registration_last_seen,
+        })))
+        .catch(() => {});
+    }, 5000);
+    return () => window.clearInterval(timer);
   }, []);
 
   // Logout handler
@@ -139,8 +135,24 @@ export default function HotelDashboard() {
     setIsMenuOpen(false);
     const updated = { ...data, connected: false };
     setData(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     navigate('/hotel-login');
+  };
+
+  const handleUnregister = async () => {
+    try {
+      const response = await fetch('/api/unregister', { method: 'POST' });
+      const result = await response.json();
+      if (result.ok) {
+        setData((previous) => ({
+          ...previous,
+          connected: false,
+          registrationStatus: 'Unregistered',
+          registrationLastSeen: null,
+        }));
+      }
+    } catch (error) {
+      console.error('Could not unregister extension', error);
+    }
   };
 
   const selectTab = (tab) => {
@@ -174,6 +186,7 @@ export default function HotelDashboard() {
     if (!newQ.trim() || !newA.trim()) return;
     const updatedKb = [...data.kb, { q: newQ.trim(), a: newA.trim() }];
     setData((prev) => ({ ...prev, kb: updatedKb }));
+    syncProfileToBackend(hotelForm, updatedKb);
     setNewQ('');
     setNewA('');
   };
@@ -182,6 +195,7 @@ export default function HotelDashboard() {
   const handleDeleteQA = (indexToDelete) => {
     const updatedKb = data.kb.filter((_, idx) => idx !== indexToDelete);
     setData((prev) => ({ ...prev, kb: updatedKb }));
+    syncProfileToBackend(hotelForm, updatedKb);
   };
 
   // Simulate incoming test call
@@ -343,13 +357,14 @@ export default function HotelDashboard() {
           <div>
             <h1 id="topHotelName">{data.hotel.name}</h1>
             <div className="sub">
-              AI receptionist · tenant <span>{data.tenantId}</span> · extension <span>{data.extension}</span>
+              AI receptionist · tenant <span>{data.tenantId || 'Not configured'}</span> · extension <span>{data.extension || 'Not configured'}</span>
             </div>
           </div>
           <div className="topbar-right">
-            <div className="live-pill">
-              <div className="pulse-dot on"></div>ON CALL LINE
+            <div className={`live-pill ${data.connected ? '' : 'offline'}`}>
+              <div className={`pulse-dot ${data.connected ? 'on' : ''}`}></div>{data.registrationStatus}
             </div>
+            {data.connected && <button type="button" className="btn-outline" onClick={handleUnregister}>Unregister</button>}
           </div>
         </header>
 

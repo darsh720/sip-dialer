@@ -17,10 +17,10 @@ export default function AiKnowledgeModal({ isOpen, onClose, data, hotelForm }) {
       time_zone: hotelForm.tz,
       front_desk_extension: hotelForm.frontExt || hotelForm.departmentExtensions?.frontDesk || '',
       fallback_extension: hotelForm.fallback || '',
-      check_in_time: '2:00 PM',
-      check_out_time: '11:00 AM',
-      late_checkout_policy: 'Subject to availability upon request',
-      cancellation_policy: '24 hours prior to check-in'
+      check_in_time: hotelForm.propertyCheckInTime || '',
+      check_out_time: hotelForm.propertyCheckOutTime || '',
+      late_checkout_policy: hotelForm.lateCheckoutPolicy || '',
+      cancellation_policy: hotelForm.cancellationPolicy || ''
     },
     hotel_details: {
       greeting: hotelForm.greeting,

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import '../style/admindashboard.css';
 import '../style/admin.css';
 
-const ADMIN_STORAGE_KEY = 'cnv_admin_platform_state_v2';
 const ITEMS_PER_PAGE = 10;
 const INTENT_WORDS = [
   'guest lookup',
@@ -13,44 +12,18 @@ const INTENT_WORDS = [
   'Wi-Fi question'
 ];
 
-const DEFAULT_ADMIN_STATE = {
+const EMPTY_ADMIN_STATE = {
   authenticated: true,
-  operatorId: 'admin@cnetvoip',
-  nextTenantSeq: 1008,
-  tenants: [
-    { id: '1000', hotel: 'ABC Hotel', address: '123 Main Street, New York, NY', propertyNo: 'PR-1001', ownerName: 'John Doe', status: 'online', callsToday: 18, lastActivity: '2 min ago', hotelProfile: { hotelName: 'ABC Hotel', propertyAddress: '123 Main Street, New York, NY', propertyPhoneNumber: '+1 (212) 555-0147', propertyCheckInTime: '2:00 PM', propertyCheckOutTime: '11:00 AM', smokingRoom: 'No', petPolicy: 'No', parkingPolicy: 'No', breakfast: 'Yes', lunch: 'Yes', dinner: 'Yes', roomType: 'AC', guestWifiPassword: 'hotel@2026' } },
-    { id: '1001', hotel: 'Grand Meridian', address: '450 Ocean Drive, Miami, FL', propertyNo: 'PR-1002', ownerName: 'Robert Smith', status: 'online', callsToday: 31, lastActivity: '6 min ago', hotelProfile: { hotelName: 'Grand Meridian', propertyAddress: '450 Ocean Drive, Miami, FL', propertyPhoneNumber: '+1 (305) 555-0101', propertyCheckInTime: '3:00 PM', propertyCheckOutTime: '12:00 PM', smokingRoom: 'Yes', petPolicy: 'No', parkingPolicy: 'Yes', parkingFee: '$20', breakfast: 'Yes', lunch: 'No', dinner: 'Yes', roomType: 'AC', guestWifiPassword: 'meridianwifi' } },
-    { id: '1002', hotel: 'Sunset Bay Resort', address: '782 Beach Blvd, San Diego, CA', propertyNo: 'PR-1003', ownerName: 'Elena Rostova', status: 'online', callsToday: 9, lastActivity: '14 min ago', hotelProfile: { hotelName: 'Sunset Bay Resort', propertyAddress: '782 Beach Blvd, San Diego, CA', propertyPhoneNumber: '+1 (619) 555-0312', propertyCheckInTime: '3:00 PM', propertyCheckOutTime: '11:00 AM', smokingRoom: 'No', petPolicy: 'Yes', parkingPolicy: 'Yes', parkingFee: '$10', breakfast: 'Yes', lunch: 'Yes', dinner: 'Yes', roomType: 'AC', guestWifiPassword: 'sunsetbay' } },
-    { id: '1003', hotel: 'Oakwood Suites', address: '12 Park Avenue, Chicago, IL', propertyNo: 'PR-1004', ownerName: 'David Miller', status: 'offline', callsToday: 0, lastActivity: '3 hr ago', hotelProfile: { hotelName: 'Oakwood Suites', propertyAddress: '12 Park Avenue, Chicago, IL', propertyPhoneNumber: '+1 (312) 555-0192', propertyCheckInTime: '2:00 PM', propertyCheckOutTime: '11:00 AM', smokingRoom: 'No', petPolicy: 'No', parkingPolicy: 'No', breakfast: 'No', lunch: 'Yes', dinner: 'Yes', roomType: 'Non-AC', guestWifiPassword: 'oakwoodfree' } },
-    { id: '1004', hotel: 'Harbor View Inn', address: '89 Marina Way, Boston, MA', propertyNo: 'PR-1005', ownerName: 'Sarah Jenkins', status: 'online', callsToday: 22, lastActivity: '1 min ago', hotelProfile: { hotelName: 'Harbor View Inn', propertyAddress: '89 Marina Way, Boston, MA', propertyPhoneNumber: '+1 (617) 555-0145', propertyCheckInTime: '1:00 PM', propertyCheckOutTime: '10:00 AM', smokingRoom: 'No', petPolicy: 'No', parkingPolicy: 'Yes', parkingFee: '$12', breakfast: 'Yes', lunch: 'Yes', dinner: 'No', roomType: 'AC', guestWifiPassword: 'harborwifi' } },
-    { id: '1005', hotel: 'Palm Court Hotel', address: '555 Sunset Blvd, Los Angeles, CA', propertyNo: 'PR-1006', ownerName: 'Michael Chang', status: 'provisioning', callsToday: 0, lastActivity: 'just now', hotelProfile: { hotelName: 'Palm Court Hotel', propertyAddress: '555 Sunset Blvd, Los Angeles, CA', propertyPhoneNumber: '+1 (213) 555-0890', propertyCheckInTime: '3:00 PM', propertyCheckOutTime: '12:00 PM', smokingRoom: 'Yes', petPolicy: 'No', parkingPolicy: 'Yes', parkingFee: '$18', breakfast: 'Yes', lunch: 'No', dinner: 'Yes', roomType: 'Both', guestWifiPassword: 'palmcourt' } },
-    { id: '1006', hotel: 'Silverline Business Hotel', address: '204 Michigan Ave, Chicago, IL', propertyNo: 'PR-1007', ownerName: 'William Vance', status: 'online', callsToday: 14, lastActivity: '9 min ago', hotelProfile: { hotelName: 'Silverline Business Hotel', propertyAddress: '204 Michigan Ave, Chicago, IL', propertyPhoneNumber: '+1 (312) 555-0880', propertyCheckInTime: '2:00 PM', propertyCheckOutTime: '12:00 PM', smokingRoom: 'No', petPolicy: 'No', parkingPolicy: 'No', breakfast: 'Yes', lunch: 'Yes', dinner: 'No', roomType: 'AC', guestWifiPassword: 'silverlineguest' } },
-    { id: '1007', hotel: 'Riverside Lodge', address: '18 River Road, Austin, TX', propertyNo: 'PR-1008', ownerName: 'Karen Taylor', status: 'offline', callsToday: 0, lastActivity: '1 day ago', hotelProfile: { hotelName: 'Riverside Lodge', propertyAddress: '18 River Road, Austin, TX', propertyPhoneNumber: '+1 (512) 555-0677', propertyCheckInTime: '3:00 PM', propertyCheckOutTime: '11:00 AM', smokingRoom: 'No', petPolicy: 'Yes', parkingPolicy: 'Yes', parkingFee: '$8', breakfast: 'Yes', lunch: 'No', dinner: 'Yes', roomType: 'Non-AC', guestWifiPassword: 'riversideguest' } }
-  ],
-  activity: [
-    { time: '11:52 AM', tenant: '1004', hotel: 'Harbor View Inn', event: 'Call handled — guest lookup' },
-    { time: '11:44 AM', tenant: '1001', hotel: 'Grand Meridian', event: 'Call handled — transfer to front desk' },
-    { time: '11:31 AM', tenant: '1000', hotel: 'ABC Hotel', event: 'Call handled — complaint ticket #2291' },
-    { time: '09:20 AM', tenant: '1003', hotel: 'Oakwood Suites', event: 'Extension went offline' }
-  ]
+  operatorId: '',
+  tenants: [],
+  activity: [],
 };
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
 
   const [adminState, setAdminState] = useState(() => {
-    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.tenants && parsed.tenants.length > 0) {
-          return { ...DEFAULT_ADMIN_STATE, ...parsed };
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    return DEFAULT_ADMIN_STATE;
+    return EMPTY_ADMIN_STATE;
   });
 
   const [activeTab, setActiveTab] = useState('overview');
@@ -61,7 +34,7 @@ export default function AdminDashboard() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalForm, setModalForm] = useState({
-    tenantId: '1000',
+    tenantId: '',
     hotelName: '',
     propertyNo: '',
     ownerName: '',
@@ -78,8 +51,15 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(adminState));
-  }, [adminState]);
+    fetch('/api/tenants')
+      .then((response) => response.json())
+      .then((result) => {
+        if (result.ok) {
+          setAdminState((previous) => ({ ...previous, tenants: result.tenants || [] }));
+        }
+      })
+      .catch((error) => console.error('Could not load tenants', error));
+  }, []);
 
   const logActivity = (tenant, event) => {
     const newEntry = {
@@ -206,9 +186,8 @@ export default function AdminDashboard() {
   };
 
   const openAddTenant = () => {
-    const nextId = adminState.nextTenantSeq || 1000;
     setModalForm({
-      tenantId: String(nextId),
+      tenantId: '',
       hotelName: '',
       propertyNo: '',
       ownerName: '',
@@ -217,15 +196,20 @@ export default function AdminDashboard() {
     setIsModalOpen(true);
   };
 
-  const submitAddTenant = (e) => {
+  const submitAddTenant = async (e) => {
     e.preventDefault();
-    if (!modalForm.hotelName.trim() || !modalForm.propertyNo.trim() || !modalForm.ownerName.trim() || !modalForm.address.trim()) {
-      showToast('Hotel name, Property No, Owner name, and Address are required', 'warn');
+    const tenantId = modalForm.tenantId.trim();
+    if (!tenantId || !modalForm.hotelName.trim() || !modalForm.propertyNo.trim() || !modalForm.ownerName.trim() || !modalForm.address.trim()) {
+      showToast('Tenant ID, hotel name, Property No, owner name, and address are required', 'warn');
+      return;
+    }
+    if (adminState.tenants.some((tenant) => tenant.id.toLowerCase() === tenantId.toLowerCase())) {
+      showToast(`Tenant ID ${tenantId} already exists`, 'warn');
       return;
     }
 
     const newTenant = {
-      id: modalForm.tenantId,
+      id: tenantId,
       hotel: modalForm.hotelName.trim(),
       propertyNo: modalForm.propertyNo.trim(),
       ownerName: modalForm.ownerName.trim(),
@@ -235,7 +219,6 @@ export default function AdminDashboard() {
       lastActivity: 'just now'
     };
 
-    const nextSeq = (adminState.nextTenantSeq || 1000) + 1;
     const nextActivity = [{
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       tenant: newTenant.id,
@@ -243,16 +226,38 @@ export default function AdminDashboard() {
       event: 'AI extension provisioned by operator'
     }, ...adminState.activity];
 
-    setAdminState((prev) => ({
-      ...prev,
-      tenants: [newTenant, ...prev.tenants],
-      nextTenantSeq: nextSeq,
-      activity: nextActivity
-    }));
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: newTenant.id,
+          hotel_profile: {
+            propertyName: newTenant.hotel,
+            propertyNo: newTenant.propertyNo,
+            ownerName: newTenant.ownerName,
+            propertyAddress: newTenant.address,
+            address: newTenant.address,
+          },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || `Server returned ${response.status}`);
+      }
 
-    setIsModalOpen(false);
-    setCurrentPage(1);
-    showToast(`Provisioning ${newTenant.hotel}…`);
+      setAdminState((prev) => ({
+        ...prev,
+        tenants: [newTenant, ...prev.tenants],
+        activity: nextActivity
+      }));
+      setIsModalOpen(false);
+      setCurrentPage(1);
+      showToast(`${newTenant.hotel} saved to database`, 'ok');
+    } catch (error) {
+      showToast(`Could not save ${newTenant.hotel}: ${error.message}`, 'warn');
+      return;
+    }
 
     setTimeout(() => {
       setAdminState((prev) => {
@@ -665,8 +670,9 @@ export default function AdminDashboard() {
               <input
                 type="text"
                 value={modalForm.tenantId}
-                readOnly
-                style={{ color: 'var(--mute)', background: '#F1F2F8' }}
+                onChange={(e) => setModalForm({ ...modalForm, tenantId: e.target.value })}
+                placeholder="Enter tenant ID"
+                required
               />
             </div>
             <div className="field-block">
