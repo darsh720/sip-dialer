@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operator Console · CNetVoIP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/connect.css">
+</head>
+<body>
+
+<div id="connectView">
+  <div class="console">
+    <div class="console-left">
+      <div>
+        <div class="brand">
+          <div class="mark admin-mark">C</div>
+          <div class="name">CNetVoIP<small>PLATFORM OPERATOR CONSOLE</small></div>
+        </div>
+        <h1>Manage every hotel<br>on one line.</h1>
+        <p>This console controls AI extensions across all tenants on core.cnetvoip.cloud — provisioning, status, and call activity in one place.</p>
+
+        <div class="status-pill off" id="statusPill">
+          <div class="pulse-dot" id="pulseDot"></div>
+          <div class="txt">Platform access is <b id="pillState">LOCKED</b></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="platform-mini-stats" style="display: flex; justify-content: space-between;">
+          <div><b>49</b><span>Tenants</span></div>
+          <div><b>4,653</b><span>Extensions</span></div>
+          <div><b>94</b><span>DIDs</span></div>
+        </div>
+        <div class="terminal" id="logBox">
+          <div class="line"><span class="t">[--:--:--]</span> Operator console initialized</div>
+          <div class="line"><span class="t">[--:--:--]</span> Waiting for operator sign-in…</div>
+        </div>
+        <div class="console-foot">core.cnetvoip.cloud · TLS 1.3 · region us-east</div>
+      </div>
+    </div>
+
+    <div class="console-right console-right-centered">
+      <div class="field">
+        <label for="inOperator">Operator Email</label>
+        <input type="email" id="inOperator" value="admin@cnetvoip" placeholder="e.g. operator@cnetvoip.cloud" />
+      </div>
+
+      <div class="field">
+        <label for="inPasscode">Passcode</label>
+        <div class="password-wrapper">
+          <input type="password" id="inPasscode" value="operator@123" placeholder="Enter operator passcode" />
+          <button type="button" class="toggle-password" id="togglePassBtn" onclick="togglePasscodeVisibility()" aria-label="Toggle password visibility">
+            <svg id="eyeIcon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg id="eyeOffIcon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none;">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="connectBtn" onclick="signIn()">
+          <span id="connectLabel">Sign in to console</span>
+        </button>
+      </div>
+
+      <a class="back-link" href="hotellogin.html">← Back to hotel extension login</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared.js"></script>
+<script src="js/adminlogin.js"></script>
+</body>
+</html>

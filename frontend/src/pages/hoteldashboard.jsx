@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../style/hoteldashboard.css';
 import { DEPARTMENT_LIST, defaultHotelProfile } from '../lib/hotelProfile';
+import AiKnowledgeModal from './aiknowledge';
 
 const DEFAULT_STATE = {
   connected: true,
@@ -47,7 +48,7 @@ const STORAGE_KEY = 'cnv_ai_extension_state_v2';
 export default function HotelDashboard() {
   const navigate = useNavigate();
 
-  // Load state from localStorage or default
+  // Load state from localStorage or fallback to default
   const [data, setData] = useState(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -89,12 +90,11 @@ export default function HotelDashboard() {
   const [hotelSaved, setHotelSaved] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // Knowledge Base Inputs & Filter
+  // Knowledge Base Inputs, Filter & Modal Visibility
   const [newQ, setNewQ] = useState('');
   const [newA, setNewA] = useState('');
   const [kbSearch, setKbSearch] = useState('');
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
-  const [jsonCopied, setJsonCopied] = useState(false);
 
   // Call Logs Filters
   const [logSearch, setLogSearch] = useState('');
@@ -125,17 +125,16 @@ export default function HotelDashboard() {
     }).catch((err) => console.error('Could not sync hotel profile to backend', err));
   };
 
-  // Sync back to localStorage and backend on mount
+  // Sync back to localStorage and backend on update
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [data]);
 
   useEffect(() => {
-    // Initial sync of profile on mount
     syncProfileToBackend(hotelForm);
   }, []);
 
-  // Handle Logout
+  // Logout handler
   const handleLogout = () => {
     setIsMenuOpen(false);
     const updated = { ...data, connected: false };
@@ -183,48 +182,6 @@ export default function HotelDashboard() {
   const handleDeleteQA = (indexToDelete) => {
     const updatedKb = data.kb.filter((_, idx) => idx !== indexToDelete);
     setData((prev) => ({ ...prev, kb: updatedKb }));
-  };
-
-  const aiKnowledgeBaseJson = JSON.stringify(
-    {
-      tenant_id: data.tenantId,
-      property_details: {
-        property_name: hotelForm.name,
-        property_phone: hotelForm.did,
-        property_address: hotelForm.address,
-        time_zone: hotelForm.tz,
-        front_desk_extension: hotelForm.frontExt,
-        fallback_extension: hotelForm.fallback,
-      },
-      hotel_details: {
-        greeting: hotelForm.greeting,
-        language: hotelForm.lang,
-        department_extensions: hotelForm.departmentExtensions,
-      },
-      knowledge_base: data.kb,
-    },
-    null,
-    2
-  );
-
-  const handleCopyJson = async () => {
-    try {
-      await navigator.clipboard.writeText(aiKnowledgeBaseJson);
-      setJsonCopied(true);
-      setTimeout(() => setJsonCopied(false), 2000);
-    } catch (error) {
-      console.error('Could not copy AI knowledge base JSON', error);
-    }
-  };
-
-  const handleDownloadJson = () => {
-    const blob = new Blob([aiKnowledgeBaseJson], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${hotelForm.name || 'hotel'}-ai-knowledge-base.json`;
-    link.click();
-    URL.revokeObjectURL(url);
   };
 
   // Simulate incoming test call
@@ -693,43 +650,6 @@ export default function HotelDashboard() {
             </div>
           </div>
 
-          {isJsonModalOpen && (
-            <div className="json-modal-backdrop" role="presentation" onMouseDown={() => setIsJsonModalOpen(false)}>
-              <section
-                className="json-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="json-modal-title"
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="json-modal-header">
-                  <div>
-                    <div className="json-modal-eyebrow">AI knowledge payload</div>
-                    <h2 id="json-modal-title">Property &amp; hotel details</h2>
-                    <p>Live JSON sent to the AI receptionist for {hotelForm.name || 'this property'}.</p>
-                  </div>
-                  <button type="button" className="icon-btn json-close" onClick={() => setIsJsonModalOpen(false)} aria-label="Close AI JSON modal">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M6 6l12 12M18 6 6 18" />
-                    </svg>
-                  </button>
-                </div>
-                <pre className="json-preview"><code>{aiKnowledgeBaseJson}</code></pre>
-                <div className="json-modal-footer">
-                  <span>{data.kb.length} Q&amp;A entries · {Object.keys(hotelForm.departmentExtensions || {}).length} departments</span>
-                  <div className="json-modal-actions">
-                    <button type="button" className="btn-outline" onClick={handleDownloadJson}>
-                      Download JSON
-                    </button>
-                    <button type="button" className="btn-solid" onClick={handleCopyJson}>
-                      {jsonCopied ? 'Copied' : 'Copy JSON'}
-                    </button>
-                  </div>
-                </div>
-              </section>
-            </div>
-          )}
-
           {/* TAB 4: CALL LOGS */}
           <div className={`tab-panel ${activeTab === 'logs' ? 'active' : ''}`}>
             <div className="card">
@@ -924,6 +844,14 @@ export default function HotelDashboard() {
           </div>
         </div>
       </div>
+
+      {/* GRAPHICAL & JSON AI KNOWLEDGE MODAL */}
+      <AiKnowledgeModal
+        isOpen={isJsonModalOpen}
+        onClose={() => setIsJsonModalOpen(false)}
+        data={data}
+        hotelForm={hotelForm}
+      />
     </div>
   );
 }

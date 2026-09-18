@@ -73,6 +73,10 @@ export default function TenantDetails() {
   const [hotelForm, setHotelForm] = useState(() => createDefaultHotelForm(tenantId, hotelQuery));
   const [hotelSaved, setHotelSaved] = useState(false);
 
+  // In-Page AI Knowledge Base View Mode
+  const [kbViewMode, setKbViewMode] = useState('graphical'); // 'graphical' | 'json'
+  const [jsonCopied, setJsonCopied] = useState(false);
+
   // Load tenant information from storage and sync active profile to backend
   useEffect(() => {
     const syncProfileToBackend = (profileToSync) => {
@@ -112,14 +116,12 @@ export default function TenantDetails() {
       }
     }
 
-    // Check if backend already has an active profile
     fetch('/api/profile')
-      .then((res) => res.ok ? res.json() : null)
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.hotel_profile && Object.keys(data.hotel_profile).length > 0) {
           setHotelForm((prev) => normalizeHotelProfile({ ...prev, ...data.hotel_profile }));
         } else {
-          // Sync default profile to backend so extensions/routing work out of the box
           syncProfileToBackend(hotelForm);
         }
       })
@@ -176,8 +178,18 @@ export default function TenantDetails() {
       propertyName: hotelForm.propertyName || hotelForm.hotel || hotelQuery,
       propertyAddress: hotelForm.propertyAddress || hotelForm.address || '',
       address: hotelForm.address || hotelForm.propertyAddress || '',
-      roomTypes: Array.isArray(hotelForm.roomTypes) ? hotelForm.roomTypes : String(hotelForm.roomTypes || '').split(',').map((item) => item.trim()).filter(Boolean),
-      hotelAmenities: Array.isArray(hotelForm.hotelAmenities) ? hotelForm.hotelAmenities : String(hotelForm.hotelAmenities || '').split(',').map((item) => item.trim()).filter(Boolean),
+      roomTypes: Array.isArray(hotelForm.roomTypes)
+        ? hotelForm.roomTypes
+        : String(hotelForm.roomTypes || '')
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean),
+      hotelAmenities: Array.isArray(hotelForm.hotelAmenities)
+        ? hotelForm.hotelAmenities
+        : String(hotelForm.hotelAmenities || '')
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean),
     });
 
     const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
@@ -244,6 +256,72 @@ export default function TenantDetails() {
     }).catch((err) => console.error('Could not update active AI profile', err));
     setHotelSaved(true);
     setTimeout(() => setHotelSaved(false), 2000);
+  };
+
+  // Compile real live dynamic payload strictly from Hotel & Property details
+  const compiledAiPayload = {
+    tenant_id: hotelForm.id || tenantId,
+    property_details: {
+      property_no: hotelForm.propertyNo || '',
+      property_name: hotelForm.propertyName || hotelForm.hotel,
+      property_phone: hotelForm.propertyPhoneNumber || '',
+      property_fax: hotelForm.propertyFaxNumber || '',
+      property_address: hotelForm.propertyAddress || hotelForm.address || '',
+      check_in_time: hotelForm.propertyCheckInTime || '',
+      check_out_time: hotelForm.propertyCheckOutTime || '',
+      late_checkout_policy: hotelForm.lateCheckoutPolicy || '',
+      cancellation_policy: hotelForm.cancellationPolicy || '',
+      room_types: hotelForm.roomTypes || [],
+      room_type_category: hotelForm.roomType || '',
+      amenities: hotelForm.hotelAmenities || [],
+      guest_wifi_password: hotelForm.guestWifiPassword || '',
+      parking: {
+        available: hotelForm.parkingPolicy,
+        fee: hotelForm.parkingFee,
+      },
+      dining: {
+        breakfast: hotelForm.breakfast,
+        breakfast_hours: hotelForm.breakfastTime,
+        lunch: hotelForm.lunch,
+        lunch_hours: hotelForm.lunchTime,
+        dinner: hotelForm.dinner,
+        dinner_hours: hotelForm.dinnerTime,
+      },
+      facilities: {
+        fitness: hotelForm.fitness,
+        fitness_hours: hotelForm.fitnessHours,
+        pool: hotelForm.pool,
+        pool_hours: hotelForm.poolHours,
+        housekeeping_hours: hotelForm.housekeepingHours,
+      },
+    },
+    hotel_details: {
+      owner_name: hotelForm.ownerName || '',
+      extension: extForm.number || '501',
+      department_extensions: hotelForm.departmentExtensions || {},
+    },
+  };
+
+  const jsonString = JSON.stringify(compiledAiPayload, null, 2);
+
+  const handleCopyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(jsonString);
+      setJsonCopied(true);
+      setTimeout(() => setJsonCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy JSON: ', err);
+    }
+  };
+
+  const handleDownloadJson = () => {
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(hotelForm.hotel || 'hotel').toLowerCase().replace(/\s+/g, '_')}_ai_knowledge.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -334,7 +412,13 @@ export default function TenantDetails() {
 
           <div className="divider"></div>
 
-          <button type="button" onClick={() => { setIsMenuOpen(false); window.close(); }}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsMenuOpen(false);
+              window.close();
+            }}
+          >
             <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
@@ -349,7 +433,8 @@ export default function TenantDetails() {
           <div>
             <h1>{hotelForm.hotel}</h1>
             <div className="sub">
-              Tenant ID <span>{hotelForm.id}</span> · Property <span>{hotelForm.propertyNo || 'N/A'}</span> · Owner <span>{hotelForm.ownerName || 'N/A'}</span>
+              Tenant ID <span>{hotelForm.id}</span> · Property <span>{hotelForm.propertyNo || 'N/A'}</span> · Owner{' '}
+              <span>{hotelForm.ownerName || 'N/A'}</span>
             </div>
           </div>
           <div className="topbar-right">
@@ -383,7 +468,10 @@ export default function TenantDetails() {
 
                 <div className="field-block">
                   <label htmlFor="regExtPassword">Extension Password</label>
-                  <div className="password-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <div
+                    className="password-wrapper"
+                    style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+                  >
                     <input
                       type={showExtPassword ? 'text' : 'password'}
                       id="regExtPassword"
@@ -450,7 +538,10 @@ export default function TenantDetails() {
                   />
                 </div>
 
-                <div className="field-block full" style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px' }}>
+                <div
+                  className="field-block full"
+                  style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px' }}
+                >
                   <button type="submit" className="btn-solid" disabled={extSaving}>
                     {extSaving ? 'Registering...' : 'Save & Register AI Extension'}
                   </button>
@@ -508,7 +599,9 @@ export default function TenantDetails() {
                     type="text"
                     id="vHotel"
                     value={hotelForm.hotel}
-                    onChange={(e) => setHotelForm({ ...hotelForm, hotel: e.target.value, propertyName: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, hotel: e.target.value, propertyName: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -528,7 +621,9 @@ export default function TenantDetails() {
                     id="pName"
                     type="text"
                     value={hotelForm.propertyName}
-                    onChange={(e) => setHotelForm({ ...hotelForm, propertyName: e.target.value, hotel: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, propertyName: e.target.value, hotel: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block full">
@@ -536,7 +631,13 @@ export default function TenantDetails() {
                   <textarea
                     id="vAddress"
                     value={hotelForm.propertyAddress || hotelForm.address}
-                    onChange={(e) => setHotelForm({ ...hotelForm, propertyAddress: e.target.value, address: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({
+                        ...hotelForm,
+                        propertyAddress: e.target.value,
+                        address: e.target.value,
+                      })
+                    }
                     required
                   />
                 </div>
@@ -546,7 +647,9 @@ export default function TenantDetails() {
                     id="pPhone"
                     type="text"
                     value={hotelForm.propertyPhoneNumber}
-                    onChange={(e) => setHotelForm({ ...hotelForm, propertyPhoneNumber: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, propertyPhoneNumber: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block">
@@ -555,7 +658,9 @@ export default function TenantDetails() {
                     id="pFax"
                     type="text"
                     value={hotelForm.propertyFaxNumber}
-                    onChange={(e) => setHotelForm({ ...hotelForm, propertyFaxNumber: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, propertyFaxNumber: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block">
@@ -564,7 +669,9 @@ export default function TenantDetails() {
                     id="checkIn"
                     type="text"
                     value={hotelForm.propertyCheckInTime}
-                    onChange={(e) => setHotelForm({ ...hotelForm, propertyCheckInTime: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, propertyCheckInTime: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block">
@@ -573,7 +680,9 @@ export default function TenantDetails() {
                     id="checkOut"
                     type="text"
                     value={hotelForm.propertyCheckOutTime}
-                    onChange={(e) => setHotelForm({ ...hotelForm, propertyCheckOutTime: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, propertyCheckOutTime: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block full">
@@ -581,7 +690,9 @@ export default function TenantDetails() {
                   <textarea
                     id="lateCheckout"
                     value={hotelForm.lateCheckoutPolicy}
-                    onChange={(e) => setHotelForm({ ...hotelForm, lateCheckoutPolicy: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, lateCheckoutPolicy: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block full">
@@ -589,7 +700,9 @@ export default function TenantDetails() {
                   <textarea
                     id="cancellation"
                     value={hotelForm.cancellationPolicy}
-                    onChange={(e) => setHotelForm({ ...hotelForm, cancellationPolicy: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, cancellationPolicy: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block full">
@@ -598,7 +711,15 @@ export default function TenantDetails() {
                     id="roomTypes"
                     type="text"
                     value={hotelForm.roomTypes.join(', ')}
-                    onChange={(e) => setHotelForm({ ...hotelForm, roomTypes: e.target.value.split(',').map((item) => item.trim()).filter(Boolean) })}
+                    onChange={(e) =>
+                      setHotelForm({
+                        ...hotelForm,
+                        roomTypes: e.target.value
+                          .split(',')
+                          .map((item) => item.trim())
+                          .filter(Boolean),
+                      })
+                    }
                   />
                 </div>
                 <div className="field-block">
@@ -730,7 +851,9 @@ export default function TenantDetails() {
                     id="bookingAmountValue"
                     type="text"
                     value={hotelForm.bookingAmountValue}
-                    onChange={(e) => setHotelForm({ ...hotelForm, bookingAmountValue: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, bookingAmountValue: e.target.value })
+                    }
                     placeholder={hotelForm.bookingAmount === 'Yes' ? 'e.g. $120' : 'Not applicable'}
                     disabled={hotelForm.bookingAmount !== 'Yes'}
                   />
@@ -753,7 +876,15 @@ export default function TenantDetails() {
                     id="hotelAmenities"
                     type="text"
                     value={hotelForm.hotelAmenities.join(', ')}
-                    onChange={(e) => setHotelForm({ ...hotelForm, hotelAmenities: e.target.value.split(',').map((item) => item.trim()).filter(Boolean) })}
+                    onChange={(e) =>
+                      setHotelForm({
+                        ...hotelForm,
+                        hotelAmenities: e.target.value
+                          .split(',')
+                          .map((item) => item.trim())
+                          .filter(Boolean),
+                      })
+                    }
                   />
                 </div>
                 <div className="field-block">
@@ -806,7 +937,9 @@ export default function TenantDetails() {
                     id="wifiPassword"
                     type="text"
                     value={hotelForm.guestWifiPassword}
-                    onChange={(e) => setHotelForm({ ...hotelForm, guestWifiPassword: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, guestWifiPassword: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block">
@@ -815,13 +948,17 @@ export default function TenantDetails() {
                     id="housekeepingHours"
                     type="text"
                     value={hotelForm.housekeepingHours}
-                    onChange={(e) => setHotelForm({ ...hotelForm, housekeepingHours: e.target.value })}
+                    onChange={(e) =>
+                      setHotelForm({ ...hotelForm, housekeepingHours: e.target.value })
+                    }
                   />
                 </div>
                 <div className="field-block full">
                   <h3 style={{ margin: '12px 0 0' }}>Department Extensions</h3>
                   <div className="desc">
-                    Add extension numbers for hotel departments. If a caller asks to speak with the <strong>Front Desk</strong>, the AI checks Front Desk first and automatically transfers to the <strong>Ring Group</strong> if Front Desk is busy or unavailable.
+                    Add extension numbers for hotel departments. If a caller asks to speak with the{' '}
+                    <strong>Front Desk</strong>, the AI checks Front Desk first and automatically transfers to the{' '}
+                    <strong>Ring Group</strong> if Front Desk is busy or unavailable.
                   </div>
                 </div>
                 {DEPARTMENT_LIST.map(([key, label]) => (
@@ -832,18 +969,23 @@ export default function TenantDetails() {
                       type="text"
                       inputMode="numeric"
                       value={hotelForm.departmentExtensions?.[key] || ''}
-                      onChange={(e) => setHotelForm({
-                        ...hotelForm,
-                        departmentExtensions: {
-                          ...hotelForm.departmentExtensions,
-                          [key]: e.target.value,
-                        },
-                      })}
+                      onChange={(e) =>
+                        setHotelForm({
+                          ...hotelForm,
+                          departmentExtensions: {
+                            ...hotelForm.departmentExtensions,
+                            [key]: e.target.value,
+                          },
+                        })
+                      }
                       placeholder="e.g. 501"
                     />
                   </div>
                 ))}
-                <div className="field-block full" style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px' }}>
+                <div
+                  className="field-block full"
+                  style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px' }}
+                >
                   <button type="submit" className="btn-solid">
                     Save Hotel Details
                   </button>
@@ -863,25 +1005,313 @@ export default function TenantDetails() {
             </div>
           </div>
 
-          {/* TAB 3: KNOWLEDGE BASE */}
+          {/* TAB 3: DYNAMIC IN-PAGE AI KNOWLEDGE BASE */}
           <div className={`tab-panel ${activeTab === 'kb' ? 'active' : ''}`}>
             <div className="card">
-              <h2>AI Knowledge Base</h2>
-              <div className="desc">Questions and automated responses configured for this hotel.</div>
-              <div className="kb-list">
-                <div className="kb-item">
-                  <div>
-                    <div className="q">What is check-in time?</div>
-                    <div className="a">Check-in starts at 2:00 PM.</div>
+              {/* HEADER TOOLBAR */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                  paddingBottom: '16px',
+                  borderBottom: '1px solid #eef0f6',
+                  marginBottom: '20px',
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span
+                      style={{
+                        background: '#ecfdf5',
+                        color: '#059669',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      Dynamic Knowledge Engine
+                    </span>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>AI Knowledge Base</h2>
+                  </div>
+                  <div className="desc" style={{ margin: 0 }}>
+                    Live AI responses and routing synchronized directly from configured property parameters.
                   </div>
                 </div>
-                <div className="kb-item">
-                  <div>
-                    <div className="q">Do you provide free Wi-Fi?</div>
-                    <div className="a">Yes, free Wi-Fi is available in all rooms and public areas.</div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {/* View switcher */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      background: '#f1f5f9',
+                      padding: '3px',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setKbViewMode('graphical')}
+                      style={{
+                        padding: '6px 14px',
+                        border: 'none',
+                        background: kbViewMode === 'graphical' ? '#ffffff' : 'transparent',
+                        color: kbViewMode === 'graphical' ? '#0f172a' : '#64748b',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        boxShadow: kbViewMode === 'graphical' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                        transition: '0.2s',
+                      }}
+                    >
+                      Graphical View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKbViewMode('json')}
+                      style={{
+                        padding: '6px 14px',
+                        border: 'none',
+                        background: kbViewMode === 'json' ? '#ffffff' : 'transparent',
+                        color: kbViewMode === 'json' ? '#0f172a' : '#64748b',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        boxShadow: kbViewMode === 'json' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                        transition: '0.2s',
+                      }}
+                    >
+                      Raw JSON
+                    </button>
                   </div>
+
+                  {/* Export Actions */}
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={handleDownloadJson}
+                    style={{ padding: '6px 12px', fontSize: '12.5px', cursor: 'pointer' }}
+                  >
+                    Download JSON
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-solid"
+                    onClick={handleCopyJson}
+                    style={{ padding: '6px 14px', fontSize: '12.5px', cursor: 'pointer' }}
+                  >
+                    {jsonCopied ? 'Copied!' : 'Copy JSON'}
+                  </button>
                 </div>
               </div>
+
+              {/* DYNAMIC CONTENT */}
+              {kbViewMode === 'graphical' ? (
+                <div>
+                  {/* Summary Metric Strip */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                      gap: '12px',
+                      background: '#f8fafc',
+                      padding: '16px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      marginBottom: '20px',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                        Tenant ID
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
+                        {compiledAiPayload.tenant_id}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                        Property
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
+                        {compiledAiPayload.property_details.property_name}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                        Phone / DID
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
+                        {compiledAiPayload.property_details.property_phone || 'Not Configured'}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+                        AI Extension
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#059669', marginTop: '2px' }}>
+                        Ext {compiledAiPayload.hotel_details.extension}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Primary Details Grid */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                      Property &amp; Policy Specs
+                    </h3>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                        gap: '12px',
+                      }}
+                    >
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Address</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.property_address || '—'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Check-In / Out Times</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.check_in_time || '—'} / {compiledAiPayload.property_details.check_out_time || '—'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Guest Wi-Fi Password</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px', fontFamily: 'monospace' }}>
+                          {compiledAiPayload.property_details.guest_wifi_password || '—'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Cancellation Policy</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.cancellation_policy || '—'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Late Checkout Policy</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.late_checkout_policy || '—'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Parking</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.parking.available === 'Yes'
+                            ? `Available ($${compiledAiPayload.property_details.parking.fee})`
+                            : 'Not Available'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Amenities & Facility Hours */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                      Amenities &amp; Facility Hours
+                    </h3>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                        gap: '12px',
+                      }}
+                    >
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Breakfast Hours</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.dining.breakfast === 'Yes'
+                            ? compiledAiPayload.property_details.dining.breakfast_hours
+                            : 'No Breakfast Service'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Fitness Center</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.facilities.fitness === 'Yes'
+                            ? compiledAiPayload.property_details.facilities.fitness_hours
+                            : 'No Fitness Center'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Pool Hours</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.facilities.pool === 'Yes'
+                            ? compiledAiPayload.property_details.facilities.pool_hours
+                            : 'No Pool Available'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px', background: '#fafbfc', borderRadius: '6px', border: '1px solid #edf2f7' }}>
+                        <div style={{ fontSize: '11px', color: '#8a8fb8', fontWeight: 600 }}>Configured Amenities</div>
+                        <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '3px' }}>
+                          {compiledAiPayload.property_details.amenities.join(', ') || 'None specified'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Department Routing Badges */}
+                  <div>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                      Department Routing Map
+                    </h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {Object.entries(compiledAiPayload.hotel_details.department_extensions).length > 0 ? (
+                        Object.entries(compiledAiPayload.hotel_details.department_extensions).map(([dept, ext]) => (
+                          <div
+                            key={dept}
+                            style={{
+                              background: '#f1f5f9',
+                              border: '1px solid #e2e8f0',
+                              padding: '5px 12px',
+                              borderRadius: '6px',
+                              fontSize: '12.5px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <span style={{ color: '#475569', textTransform: 'capitalize' }}>{dept}</span>
+                            <span style={{ color: '#0f766e', fontWeight: 700 }}>Ext {ext || '—'}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ fontSize: '12.5px', color: '#94a3b8' }}>No departments configured.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* RAW JSON TAB */
+                <div style={{ marginTop: '10px' }}>
+                  <pre
+                    style={{
+                      background: '#0f172a',
+                      color: '#38bdf8',
+                      padding: '20px',
+                      borderRadius: '8px',
+                      fontSize: '12.5px',
+                      overflowX: 'auto',
+                      fontFamily: '"JetBrains Mono", Consolas, Menlo, monospace',
+                      margin: 0,
+                      lineHeight: '1.5',
+                      maxHeight: '550px',
+                    }}
+                  >
+                    <code>{jsonString}</code>
+                  </pre>
+                </div>
+              )}
             </div>
           </div>
 
@@ -904,23 +1334,35 @@ export default function TenantDetails() {
                   <tr>
                     <td>09:14 AM</td>
                     <td className="caller">+1 646 555 0912</td>
-                    <td><span className="tag transfer">transfer</span></td>
+                    <td>
+                      <span className="tag transfer">transfer</span>
+                    </td>
                     <td>0:42</td>
-                    <td><span className="status-chip completed">completed</span></td>
+                    <td>
+                      <span className="status-chip completed">completed</span>
+                    </td>
                   </tr>
                   <tr>
                     <td>09:47 AM</td>
                     <td className="caller">+1 917 555 0134</td>
-                    <td><span className="tag lookup">lookup</span></td>
+                    <td>
+                      <span className="tag lookup">lookup</span>
+                    </td>
                     <td>0:28</td>
-                    <td><span className="status-chip completed">completed</span></td>
+                    <td>
+                      <span className="status-chip completed">completed</span>
+                    </td>
                   </tr>
                   <tr>
                     <td>10:22 AM</td>
                     <td className="caller">+1 332 555 0087</td>
-                    <td><span className="tag ticket">ticket</span></td>
+                    <td>
+                      <span className="tag ticket">ticket</span>
+                    </td>
                     <td>1:05</td>
-                    <td><span className="status-chip escalated">escalated</span></td>
+                    <td>
+                      <span className="status-chip escalated">escalated</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>

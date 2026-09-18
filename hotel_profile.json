@@ -23,7 +23,7 @@
     "smokingRoom": "Yes",
     "petPolicy": "No",
     "parkingPolicy": "Yes",
-    "parkingFee": "$25 per day",
+    "parkingFee": "25 per day",
     "nearbyLocation": "Airport in 1 mile",
     "breakfast": "Yes",
     "lunch": "No",
@@ -42,9 +42,9 @@
     "guestWifiPassword": "56956",
     "housekeepingHours": "",
     "departmentExtensions": {
-      "frontDesk": "",
-      "ringGroup": "6400",
-      "sales": "",
+      "frontDesk": "202",
+      "ringGroup": "",
+      "sales": "201",
       "gm": "",
       "laundry": "",
       "lobby": "",
@@ -77,5 +77,5 @@
     },
     "hotelName": "ABC Hotel"
   },
-  "updated_at": 1789746128.2859788
+  "updated_at": 1789750025.2979507
 }
