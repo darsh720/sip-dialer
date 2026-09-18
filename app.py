@@ -11,6 +11,7 @@ import audioop
 import base64
 import json
 import os
+import re
 import socket
 import threading
 import time
@@ -189,8 +190,149 @@ VoIPPhone.callback = _patched_phone_callback
 
 
 # ---------------------------------------------------------------------------
+# FIX 4: Handle 407 Proxy Authentication Required for Asterisk outgoing calls
+# ---------------------------------------------------------------------------
+
+_orig_sip_parse_header = SIPMessage.parse_header
+
+def _patched_sip_parse_header(self, header, data):
+    if header in ("Proxy-Authenticate", "Proxy-Authorization", "WWW-Authenticate", "Authorization"):
+        cleaned = data.replace("Digest ", "")
+        row_data = self.auth_match.findall(cleaned)
+        header_data = {}
+        for var, val in row_data:
+            header_data[var] = val.strip('"')
+        self.headers[header] = header_data
+        self.authentication = header_data
+        return
+    return _orig_sip_parse_header(self, header, data)
+
+SIPMessage.parse_header = _patched_sip_parse_header
+
+_orig_sip_client_invite = SIPClient.invite
+
+def _patched_sip_client_invite(self, number: str, ms, sendtype):
+    branch = "z9hG4bK" + self.gen_call_id()[0:25]
+    call_id = self.gen_call_id()
+    sess_id = self.sessID.next()
+    invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
+    with self.recvLock:
+        self.out.sendto(invite.encode("utf8"), (self.server, self.port))
+        response = SIPMessage(self.s.recv(8192))
+
+        while (
+            response.status not in (SIPStatus(401), SIPStatus(407), SIPStatus(100), SIPStatus(180))
+        ) or response.headers.get("Call-ID") != call_id:
+            if not self.NSD:
+                break
+            self.parse_message(response)
+            response = SIPMessage(self.s.recv(8192))
+
+        if response.status in (SIPStatus(100), SIPStatus(180)):
+            return SIPMessage(invite.encode("utf8")), call_id, sess_id
+
+        ack = self.gen_ack(response)
+        self.out.sendto(ack.encode("utf8"), (self.server, self.port))
+
+        authhash = self.gen_authorization(response)
+        auth_info = getattr(response, "authentication", {}) or {}
+        nonce = auth_info.get("nonce", "")
+        realm = auth_info.get("realm", "")
+        hdr_name = "Proxy-Authorization" if response.status == SIPStatus(407) else "Authorization"
+        auth = (
+            f'{hdr_name}: Digest username="{self.username}",realm='
+            + f'"{realm}",nonce="{nonce}",uri="sip:{self.server};'
+            + f'transport=UDP",response="{str(authhash, "utf8")}",'
+            + "algorithm=MD5\r\n"
+        )
+
+        invite = self.gen_invite(number, str(sess_id), ms, sendtype, branch, call_id)
+        invite = invite.replace("\r\nContent-Length", f"\r\n{auth}Content-Length")
+        self.out.sendto(invite.encode("utf8"), (self.server, self.port))
+        return SIPMessage(invite.encode("utf8")), call_id, sess_id
+
+SIPClient.invite = _patched_sip_client_invite
+
+
+# ---------------------------------------------------------------------------
+# Department Normalization & Profile Persistence
+# ---------------------------------------------------------------------------
+
+PROFILE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hotel_profile.json")
+
+def load_persisted_profile() -> dict:
+    if os.path.exists(PROFILE_FILE):
+        try:
+            with open(PROFILE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except Exception as e:
+            print("[PROFILE] Error loading hotel_profile.json:", e)
+    return {}
+
+def save_persisted_profile(profile_data: dict, tenant_id: Optional[str] = None):
+    try:
+        to_save = {
+            "tenant_id": tenant_id or state.get("tenant_id") or "1000",
+            "hotel_profile": profile_data or {},
+            "updated_at": time.time(),
+        }
+        with open(PROFILE_FILE, "w", encoding="utf-8") as f:
+            json.dump(to_save, f, indent=2)
+        depts = profile_data.get("departmentExtensions", {}) if isinstance(profile_data, dict) else {}
+        print(f"[PROFILE] Saved hotel profile ({len(depts)} departments) to {PROFILE_FILE}")
+    except Exception as e:
+        print("[PROFILE] Error saving hotel_profile.json:", e)
+
+def normalize_department(dept: str) -> str:
+    cleaned = re.sub(r"[_\s\-]+", "", (dept or "").lower())
+    mapping = {
+        "frontdesk": "frontDesk",
+        "front": "frontDesk",
+        "reception": "frontDesk",
+        "receptionist": "frontDesk",
+        "operator": "frontDesk",
+        "human": "frontDesk",
+        "desk": "frontDesk",
+        "ringgroup": "ringGroup",
+        "ring": "ringGroup",
+        "group": "ringGroup",
+        "sales": "sales",
+        "gm": "gm",
+        "generalmanager": "gm",
+        "manager": "gm",
+        "laundry": "laundry",
+        "lobby": "lobby",
+        "fitness": "fitness",
+        "gym": "fitness",
+        "pool": "pool",
+        "swimmingpool": "pool",
+        "elevator": "elevator",
+        "lift": "elevator",
+        "meetingroom": "meetingRoom",
+        "meeting": "meetingRoom",
+        "mettingroom": "meetingRoom",
+        "maintenanceroom": "maintenanceRoom",
+        "maintenance": "maintenanceRoom",
+        "maintenace": "maintenanceRoom",
+        "maintenaceroom": "maintenanceRoom",
+        "office": "office",
+        "agm": "agm",
+        "assistantgeneralmanager": "agm",
+        "assistantgm": "agm",
+        "businesscenter": "businessCenter",
+        "busineecenter": "businessCenter",
+        "business": "businessCenter",
+    }
+    return mapping.get(cleaned, dept)
+
+
+# ---------------------------------------------------------------------------
 # Application setup & runtime state
 # ---------------------------------------------------------------------------
+
+_initial_profile = load_persisted_profile()
 
 state = {
     "registered": False,
@@ -199,6 +341,8 @@ state = {
     "extension": None,
     "server": None,
     "remote_uri": None,
+    "tenant_id": _initial_profile.get("tenant_id", "1000"),
+    "hotel_profile": _initial_profile.get("hotel_profile", {}),
 }
 
 phone: Optional[VoIPPhone] = None
@@ -315,6 +459,14 @@ async def _openai_realtime_session(call, api_key):
     headers = {
         "Authorization": f"Bearer {api_key}",
     }
+    hotel_profile = state.get("hotel_profile") or {}
+    profile_lines = [
+        f"- {key}: {value}"
+        for key, value in hotel_profile.items()
+        if value not in (None, "", [], {})
+    ]
+    hotel_context = "\n".join(profile_lines) or "- No hotel profile has been provided."
+    department_extensions = hotel_profile.get("departmentExtensions", {})
     async with websockets.connect(
         endpoint, additional_headers=headers, max_size=None
     ) as websocket:
@@ -326,7 +478,19 @@ async def _openai_realtime_session(call, api_key):
                 "model": model,
                 "output_modalities": ["audio"],
                 "instructions": (
-                    "You are Era, a helpful telephone assistant. "
+                    "You are Era, the telephone receptionist for this specific hotel. "
+                    "Answer every hotel question using only the tenant hotel profile below. "
+                    "Never ask which hotel the caller means because this call is already for "
+                    "the configured hotel. Give the exact saved value when it is available. "
+                    "If the profile does not contain the requested information, say that you "
+                    "do not have that information and offer to connect the caller to the front desk. "
+                    "When the caller asks to speak to a department or person, use the transfer "
+                    "tool immediately. A department is available when its extension is present. "
+                    "For Front Desk, try Front Desk first and use Ring Group if Front Desk is empty. "
+                    "Do not read extension numbers to the caller.\n"
+                    "Do not invent, infer, or substitute details from another hotel.\n\n"
+                    "TENANT HOTEL PROFILE:\n"
+                    + hotel_context + "\n\n"
                     "Understand clear American English from a phone call. "
                     "Do not guess or invent words. Wait until the caller "
                     "finishes a complete sentence before answering. "
@@ -364,6 +528,25 @@ async def _openai_realtime_session(call, api_key):
                         "speed": speed,
                     },
                 },
+                "tools": [{
+                    "type": "function",
+                    "name": "transfer_to_department",
+                    "description": "Transfer the caller to a configured hotel department extension.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "department": {
+                                "type": "string",
+                                "enum": [
+                                    "frontDesk", "ringGroup", "sales", "gm", "laundry",
+                                    "lobby", "fitness", "pool", "elevator", "meetingRoom",
+                                    "maintenanceRoom", "office", "agm", "businessCenter"
+                                ]
+                            }
+                        },
+                        "required": ["department"]
+                    }
+                }],
             },
         }))
         await websocket.send(json.dumps({
@@ -379,25 +562,56 @@ async def _openai_realtime_session(call, api_key):
             rtp_client.pmin = RTP.RTPPacketManager()
             rtp_client.pmout = RTP.RTPPacketManager()
 
-        playback_queue = asyncio.Queue(maxsize=100)
+        playback_queue = asyncio.Queue(maxsize=500)
         playback_remainder = b""
+        # Track how many audio chunks are queued/in-flight so the echo
+        # suppression flag doesn't flicker on brief gaps between bursts.
+        _agent_audio_inflight = 0
         agent_speaking = asyncio.Event()
 
+        async def transfer_to_department(department):
+            # Always read live from state so updated extensions are used
+            live_extensions = (state.get("hotel_profile") or {}).get("departmentExtensions", {})
+            targets = [live_extensions.get(department, "")]
+            if department == "frontDesk":
+                targets.append(live_extensions.get("ringGroup", ""))
+            targets = list(dict.fromkeys(str(target).strip() for target in targets if str(target).strip()))
+            print(f"[TRANSFER] dept={department} targets={targets} live_extensions={live_extensions}")
+            if not targets:
+                return False, "That department is not configured. Offer the caller the front desk instead."
+            failures = []
+            for target in targets:
+                try:
+                    print(f"[TRANSFER] Attempting transfer to {target}")
+                    await asyncio.to_thread(start_call_transfer, call, target)
+                    return True, f"The caller was transferred to {department}."
+                except Exception as ex:
+                    print(f"[TRANSFER] Failed for {target}: {ex}")
+                    failures.append(str(ex))
+            return False, "Nobody is available in that department right now. Offer to take a message."
+
         async def play_agent_audio():
+            nonlocal _agent_audio_inflight
             while call.state == CallState.ANSWERED:
                 pcm_chunk = await playback_queue.get()
                 agent_speaking.set()
+                # write_audio paces itself via the RTP transmitter timing;
+                # no extra sleep is needed (the old asyncio.sleep(CHUNK/RATE)
+                # was doubling latency and creating audible gaps).
                 await asyncio.to_thread(call.write_audio, pcm_chunk)
-                await asyncio.sleep(CHUNK / RATE)
-                if playback_queue.empty():
+                _agent_audio_inflight = max(0, _agent_audio_inflight - 1)
+                if _agent_audio_inflight == 0 and playback_queue.empty():
                     agent_speaking.clear()
 
         def clear_playback():
+            nonlocal _agent_audio_inflight
             while True:
                 try:
                     playback_queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
+            _agent_audio_inflight = 0
+            agent_speaking.clear()
             for rtp_client in call.RTPClients:
                 rtp_client.pmout = RTP.RTPPacketManager()
 
@@ -424,9 +638,12 @@ async def _openai_realtime_session(call, api_key):
                 }))
                 if audio_chunks % 50 == 0:
                     print(f"[AI] Caller RTP audio sent: {audio_chunks} chunks")
+                # Yield to the event loop so playback and receiver tasks
+                # get prompt scheduling even under heavy caller audio load.
+                await asyncio.sleep(0)
 
         async def receive_agent_audio():
-            nonlocal playback_remainder
+            nonlocal playback_remainder, _agent_audio_inflight
             rate_state = None
             response_audio_active = False
             while call.state == CallState.ANSWERED:
@@ -438,6 +655,21 @@ async def _openai_realtime_session(call, api_key):
                     print("[AI] Agent:", message.get("transcript", ""))
                 elif event_type == "error":
                     raise RuntimeError(f"OpenAI error: {message.get('error')}")
+                elif event_type == "response.function_call_arguments.done":
+                    if message.get("name") == "transfer_to_department":
+                        arguments = json.loads(message.get("arguments", "{}"))
+                        transferred, result = await transfer_to_department(arguments.get("department", ""))
+                        await websocket.send(json.dumps({
+                            "type": "conversation.item.create",
+                            "item": {
+                                "type": "function_call_output",
+                                "call_id": message.get("call_id"),
+                                "output": result,
+                            },
+                        }))
+                        if transferred:
+                            return
+                        await websocket.send(json.dumps({"type": "response.create"}))
                 elif event_type == "response.output_audio.delta":
                     if not response_audio_active:
                         # Each response is an independent PCM stream. Reusing
@@ -452,13 +684,37 @@ async def _openai_realtime_session(call, api_key):
                     pcm_8khz_unsigned = audioop.bias(pcm_8khz_signed, 1, 128)
                     playback_remainder += pcm_8khz_unsigned
                     while len(playback_remainder) >= CHUNK:
-                        await playback_queue.put(playback_remainder[:CHUNK])
+                        chunk_to_queue = playback_remainder[:CHUNK]
                         playback_remainder = playback_remainder[CHUNK:]
+                        try:
+                            playback_queue.put_nowait(chunk_to_queue)
+                            _agent_audio_inflight += 1
+                        except asyncio.QueueFull:
+                            # Queue overflow — drop oldest chunk to keep
+                            # playback current rather than stalling the
+                            # WebSocket receiver (which would cascade into
+                            # starving ALL audio paths).
+                            try:
+                                playback_queue.get_nowait()
+                                _agent_audio_inflight = max(0, _agent_audio_inflight - 1)
+                            except asyncio.QueueEmpty:
+                                pass
+                            playback_queue.put_nowait(chunk_to_queue)
+                            _agent_audio_inflight += 1
                 elif event_type == "response.output_audio.done":
                     if playback_remainder:
-                        await playback_queue.put(
-                            playback_remainder.ljust(CHUNK, b"\x80")
-                        )
+                        padded = playback_remainder.ljust(CHUNK, b"\x80")
+                        try:
+                            playback_queue.put_nowait(padded)
+                            _agent_audio_inflight += 1
+                        except asyncio.QueueFull:
+                            try:
+                                playback_queue.get_nowait()
+                                _agent_audio_inflight = max(0, _agent_audio_inflight - 1)
+                            except asyncio.QueueEmpty:
+                                pass
+                            playback_queue.put_nowait(padded)
+                            _agent_audio_inflight += 1
                         playback_remainder = b""
                     rate_state = None
                     response_audio_active = False
@@ -518,10 +774,73 @@ class RegisterRequest(BaseModel):
     server: str
     port: int = 5060
     my_ip: Optional[str] = None
+    tenant_id: Optional[str] = None
+    hotel_profile: Optional[dict] = None
 
 
 class DialRequest(BaseModel):
     number: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    tenant_id: Optional[str] = None
+    hotel_profile: dict
+
+
+def start_call_transfer(source_call, target_number: str):
+    """Bridge the answered caller to a configured hotel extension."""
+    if phone is None:
+        raise RuntimeError("The SIP phone is no longer registered")
+
+    with lib_lock:
+        target_call = phone.call(target_number)
+
+    state["call_status"] = f"Transferring to {target_number}..."
+    state["remote_uri"] = target_number
+    broadcast_status()
+
+    deadline = time.monotonic() + 30
+    while target_call.state in (CallState.DIALING, CallState.RINGING):
+        if time.monotonic() >= deadline:
+            try:
+                target_call.hangup()
+            except Exception:
+                pass
+            raise RuntimeError(f"Transfer target {target_number} did not answer")
+        time.sleep(0.2)
+
+    if target_call.state != CallState.ANSWERED:
+        raise RuntimeError(f"Transfer target {target_number} failed with state: {target_call.state}")
+
+    state["call_status"] = f"Connected to {target_number}"
+    broadcast_status()
+
+    def forward_audio(read_call, write_call):
+        try:
+            while source_call.state == CallState.ANSWERED and target_call.state == CallState.ANSWERED:
+                write_call.write_audio(read_call.read_audio(CHUNK, True))
+        except Exception as ex:
+            print("transfer audio error:", ex)
+
+    threads = [
+        threading.Thread(target=forward_audio, args=(source_call, target_call), daemon=True),
+        threading.Thread(target=forward_audio, args=(target_call, source_call), daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    while source_call.state == CallState.ANSWERED and target_call.state == CallState.ANSWERED:
+        time.sleep(0.2)
+
+    try:
+        if source_call.state != CallState.ENDED:
+            source_call.hangup()
+    except Exception:
+        pass
+    try:
+        if target_call.state != CallState.ENDED:
+            target_call.hangup()
+    except Exception:
+        pass
 
 
 def watch_call_end(call):
@@ -595,10 +914,31 @@ def register(req: RegisterRequest):
 
         state["extension"] = req.extension
         state["server"] = f"{req.server}:{req.port}"
+        state["tenant_id"] = req.tenant_id
+        state["hotel_profile"] = req.hotel_profile or {}
 
     time.sleep(1.0)
     state["registered"] = True
     state["reg_status"] = "Registered"
+    broadcast_status()
+    return {"ok": True}
+
+
+@app.get("/api/profile")
+def get_profile():
+    return {
+        "ok": True,
+        "tenant_id": state.get("tenant_id"),
+        "hotel_profile": state.get("hotel_profile", {}),
+    }
+
+
+@app.post("/api/profile")
+def update_profile(req: ProfileUpdateRequest):
+    if req.tenant_id:
+        state["tenant_id"] = req.tenant_id
+    state["hotel_profile"] = req.hotel_profile
+    save_persisted_profile(req.hotel_profile, req.tenant_id)
     broadcast_status()
     return {"ok": True}
 
@@ -625,11 +965,15 @@ def dial(req: DialRequest):
     global current_call
     if phone is None:
         return {"ok": False, "error": "Not registered yet"}
+    if current_call is not None:
+        return {"ok": False, "error": "A call is already active"}
     with lib_lock:
         try:
             call = phone.call(req.number)
             current_call = call
         except Exception as e:
+            state["call_status"] = f"Call failed: {e}"
+            broadcast_status()
             return {"ok": False, "error": str(e)}
 
     state["call_status"] = f"Calling {req.number}..."
@@ -644,6 +988,9 @@ def dial(req: DialRequest):
                 state["call_status"] = "Connected"
                 broadcast_status()
                 start_audio_bridge(call)
+            elif call.state != CallState.ENDED:
+                state["call_status"] = f"Call ended ({call.state})"
+                broadcast_status()
             threading.Thread(
                 target=watch_call_end, args=(call,), daemon=True
             ).start()

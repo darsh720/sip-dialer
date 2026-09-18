@@ -16,7 +16,28 @@ function togglePassword(inputId, btn) {
   }
 }
 
-function saveExtensionRegistration() {
+const DEPT_KEYS = [
+  'frontDesk', 'ringGroup', 'sales', 'gm', 'laundry', 'lobby', 'fitness',
+  'pool', 'elevator', 'meetingRoom', 'maintenanceRoom', 'office', 'agm', 'businessCenter'
+];
+
+function getDepartmentExtensionsFromInputs() {
+  const exts = {};
+  DEPT_KEYS.forEach((key) => {
+    const el = document.getElementById(`dept-${key}`);
+    exts[key] = el ? el.value.trim() : '';
+  });
+  return exts;
+}
+
+function setDepartmentExtensionsToInputs(exts = {}) {
+  DEPT_KEYS.forEach((key) => {
+    const el = document.getElementById(`dept-${key}`);
+    if (el) el.value = exts[key] || '';
+  });
+}
+
+async function saveExtensionRegistration() {
   const extNumber = document.getElementById('regExtNumber').value.trim();
   const extPassword = document.getElementById('regExtPassword').value.trim();
   const serverUrl = document.getElementById('regServerUrl').value.trim();
@@ -26,21 +47,91 @@ function saveExtensionRegistration() {
     return;
   }
 
-  const note = document.getElementById('regSavedNote');
-  if(note) {
-    note.style.opacity = '1';
-    setTimeout(() => note.style.opacity = '0', 2000);
+  const button = document.querySelector('[onclick="saveExtensionRegistration()"]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Registering...';
   }
-  if(typeof toast === 'function') toast('AI Extension registered successfully', 'ok');
+
+  const deptExts = getDepartmentExtensionsFromInputs();
+  const params = new URLSearchParams(window.location.search);
+  const tenantId = params.get('tenant') || '1000';
+  const hotelName = (document.getElementById('vHotel') ? document.getElementById('vHotel').value : '') || 'ABC Hotel';
+  const hotelAddress = (document.getElementById('vAddress') ? document.getElementById('vAddress').value : '') || '';
+
+  try {
+    const response = await fetch('/api/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        extension: extNumber,
+        password: extPassword,
+        server: serverUrl,
+        port: 5060,
+        tenant_id: tenantId,
+        hotel_profile: {
+          propertyName: hotelName,
+          hotel: hotelName,
+          propertyAddress: hotelAddress,
+          address: hotelAddress,
+          departmentExtensions: deptExts
+        }
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Registration failed');
+
+    const note = document.getElementById('regSavedNote');
+    if(note) {
+      note.style.opacity = '1';
+      setTimeout(() => note.style.opacity = '0', 3000);
+    }
+    if(typeof toast === 'function') toast('AI Extension registered successfully', 'ok');
+  } catch (error) {
+    if(typeof toast === 'function') toast(error.message, 'warn');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Save & Register AI Extension';
+    }
+  }
 }
 
-function saveHotelDetails() {
+async function saveHotelDetails() {
+  const params = new URLSearchParams(window.location.search);
+  const tenantId = params.get('tenant') || '1000';
+  const hotelName = (document.getElementById('vHotel') ? document.getElementById('vHotel').value : '') || 'ABC Hotel';
+  const propertyNo = (document.getElementById('vProperty') ? document.getElementById('vProperty').value : '') || '';
+  const ownerName = (document.getElementById('vOwner') ? document.getElementById('vOwner').value : '') || '';
+  const hotelAddress = (document.getElementById('vAddress') ? document.getElementById('vAddress').value : '') || '';
+  const deptExts = getDepartmentExtensionsFromInputs();
+
+  const profile = {
+    propertyName: hotelName,
+    hotel: hotelName,
+    propertyNo: propertyNo,
+    ownerName: ownerName,
+    propertyAddress: hotelAddress,
+    address: hotelAddress,
+    departmentExtensions: deptExts
+  };
+
+  try {
+    await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenant_id: tenantId, hotel_profile: profile })
+    });
+  } catch (err) {
+    console.error('Could not sync hotel details with backend', err);
+  }
+
   const note = document.getElementById('hotelSavedNote');
   if(note) {
     note.style.opacity = '1';
     setTimeout(() => note.style.opacity = '0', 2000);
   }
-  if(typeof toast === 'function') toast('Hotel details saved', 'ok');
+  if(typeof toast === 'function') toast('Hotel details & extensions saved', 'ok');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -70,6 +161,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if(document.getElementById('vHotel')) document.getElementById('vHotel').value = t.hotel;
   if(document.getElementById('vOwner')) document.getElementById('vOwner').value = t.ownerName || 'N/A';
   if(document.getElementById('vAddress')) document.getElementById('vAddress').value = t.address || 'N/A';
+
+  // Set default frontDesk and ringGroup extensions if present or from backend
+  const existingDeptExts = (t.hotelProfile && t.hotelProfile.departmentExtensions) || {
+    frontDesk: '501',
+    ringGroup: '502'
+  };
+  setDepartmentExtensionsToInputs(existingDeptExts);
+
+  // Fetch active profile from backend if available
+  fetch('/api/profile')
+    .then((r) => r.ok ? r.json() : null)
+    .then((data) => {
+      if (data && data.hotel_profile && data.hotel_profile.departmentExtensions) {
+        setDepartmentExtensionsToInputs(data.hotel_profile.departmentExtensions);
+      }
+    })
+    .catch(() => {});
 
   // Sidebar navigation tab switcher
   const navList = document.getElementById('navList');

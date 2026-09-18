@@ -272,6 +272,7 @@
         <div class="call-actions">
           <button class="btn-call" id="callBtn">Call</button>
         </div>
+        <div class="error-msg" id="callError"></div>
       </div>
 
       <div id="activeCallActions" style="display:none;">
@@ -379,8 +380,26 @@ document.querySelectorAll('.key').forEach(btn => {
 });
 
 el('callBtn').addEventListener('click', async () => {
-  if (!dialedNumber) return;
-  await post('/api/dial', { number: dialedNumber });
+  const errBox = el('callError');
+  errBox.style.display = 'none';
+  if (!dialedNumber) {
+    errBox.textContent = 'Enter a number before calling.';
+    errBox.style.display = 'block';
+    return;
+  }
+  el('callBtn').disabled = true;
+  try {
+    const result = await post('/api/dial', { number: dialedNumber });
+    if (!result.ok) {
+      errBox.textContent = result.error || 'Call could not be started.';
+      errBox.style.display = 'block';
+    }
+  } catch (error) {
+    errBox.textContent = 'The call request failed. Check that the server is running.';
+    errBox.style.display = 'block';
+  } finally {
+    el('callBtn').disabled = false;
+  }
 });
 
 el('answerBtn').addEventListener('click', async () => {

@@ -41,36 +41,78 @@ function logout(){
   window.location.href = 'hotellogin.html';
 }
 
+const HOTEL_DEPT_KEYS = [
+  'frontDesk', 'ringGroup', 'sales', 'gm', 'laundry', 'lobby', 'fitness',
+  'pool', 'elevator', 'meetingRoom', 'maintenanceRoom', 'office', 'agm', 'businessCenter'
+];
+
 /* ============ HOTEL DETAILS ============ */
 function fillHotelForm(){
   const h = state.hotel;
-  document.getElementById('hName').value = h.name;
-  document.getElementById('hDid').value = h.did;
-  document.getElementById('hFrontExt').value = h.frontExt;
-  document.getElementById('hTz').value = h.tz;
-  document.getElementById('hAddress').value = h.address;
-  document.getElementById('hGreeting').value = h.greeting;
-  document.getElementById('hLang').value = h.lang;
-  document.getElementById('hFallback').value = h.fallback;
+  document.getElementById('hName').value = h.name || '';
+  document.getElementById('hDid').value = h.did || '';
+  document.getElementById('hFrontExt').value = h.frontExt || '';
+  document.getElementById('hTz').value = h.tz || 'America/New_York';
+  document.getElementById('hAddress').value = h.address || '';
+  document.getElementById('hGreeting').value = h.greeting || '';
+  document.getElementById('hLang').value = h.lang || 'English';
+  document.getElementById('hFallback').value = h.fallback || '';
+
+  const depts = h.departmentExtensions || {};
+  HOTEL_DEPT_KEYS.forEach((k) => {
+    const el = document.getElementById(`hdept-${k}`);
+    if(el) {
+      el.value = depts[k] || (k === 'frontDesk' ? (h.frontExt || '') : '');
+    }
+  });
 }
 
 function saveHotel(){
+  const deptExts = {};
+  HOTEL_DEPT_KEYS.forEach((k) => {
+    const el = document.getElementById(`hdept-${k}`);
+    deptExts[k] = el ? el.value.trim() : '';
+  });
+
+  const frontVal = deptExts['frontDesk'] || document.getElementById('hFrontExt').value || '';
+  document.getElementById('hFrontExt').value = frontVal;
+
   state.hotel = {
     name: document.getElementById('hName').value || 'Unnamed Hotel',
     did: document.getElementById('hDid').value,
-    frontExt: document.getElementById('hFrontExt').value,
+    frontExt: frontVal,
     tz: document.getElementById('hTz').value,
     address: document.getElementById('hAddress').value,
     greeting: document.getElementById('hGreeting').value,
     lang: document.getElementById('hLang').value,
-    fallback: document.getElementById('hFallback').value
+    fallback: document.getElementById('hFallback').value,
+    departmentExtensions: deptExts
   };
   saveState(state);
   syncHotelToUI();
+
+  // Sync to active backend profile
+  fetch('/api/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tenant_id: state.tenantId || 'TEN-0049',
+      hotel_profile: {
+        propertyName: state.hotel.name,
+        hotel: state.hotel.name,
+        propertyPhoneNumber: state.hotel.did,
+        propertyAddress: state.hotel.address,
+        address: state.hotel.address,
+        greeting: state.hotel.greeting,
+        departmentExtensions: deptExts
+      }
+    })
+  }).catch((err) => console.error('Could not sync hotel details to backend', err));
+
   const note = document.getElementById('hotelSavedNote');
   note.style.opacity = '1';
   setTimeout(()=> note.style.opacity = '0', 1800);
-  toast('Hotel details saved', 'ok');
+  toast('Hotel details & department extensions saved', 'ok');
 }
 
 function syncHotelToUI(){

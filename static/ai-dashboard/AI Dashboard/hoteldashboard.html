@@ -170,7 +170,72 @@
               <label>Fallback transfer extension</label>
               <input type="text" id="hFallback" value="501" />
             </div>
-            <div class="field-block full" style="display:flex;align-items:center;gap:14px;">
+
+            <div class="field-block full">
+              <h3 style="margin:12px 0 4px;font-size:15px;">Department Extensions</h3>
+              <div class="desc" style="margin-bottom:10px;">
+                Configure direct extensions for each hotel department. When a caller requests the <strong>Front Desk</strong>, the AI tries Front Desk first and automatically transfers to the <strong>Ring Group</strong> if Front Desk is unavailable or busy.
+              </div>
+            </div>
+
+            <div class="field-block">
+              <label for="hdept-frontDesk">Front Desk Extension</label>
+              <input type="text" id="hdept-frontDesk" value="501" placeholder="e.g. 501" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-ringGroup">Ring Group Extension</label>
+              <input type="text" id="hdept-ringGroup" value="502" placeholder="e.g. 502" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-sales">Sales Extension</label>
+              <input type="text" id="hdept-sales" placeholder="e.g. 503" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-gm">GM Extension</label>
+              <input type="text" id="hdept-gm" placeholder="e.g. 504" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-laundry">Laundry Extension</label>
+              <input type="text" id="hdept-laundry" placeholder="e.g. 505" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-lobby">Lobby Extension</label>
+              <input type="text" id="hdept-lobby" placeholder="e.g. 506" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-fitness">Fitness Extension</label>
+              <input type="text" id="hdept-fitness" placeholder="e.g. 507" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-pool">Pool Extension</label>
+              <input type="text" id="hdept-pool" placeholder="e.g. 508" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-elevator">Elevator Extension</label>
+              <input type="text" id="hdept-elevator" placeholder="e.g. 509" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-meetingRoom">Meeting Room Extension</label>
+              <input type="text" id="hdept-meetingRoom" placeholder="e.g. 510" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-maintenanceRoom">Maintenance Room Extension</label>
+              <input type="text" id="hdept-maintenanceRoom" placeholder="e.g. 511" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-office">Office Extension</label>
+              <input type="text" id="hdept-office" placeholder="e.g. 512" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-agm">AGM Extension</label>
+              <input type="text" id="hdept-agm" placeholder="e.g. 513" />
+            </div>
+            <div class="field-block">
+              <label for="hdept-businessCenter">Business Center Extension</label>
+              <input type="text" id="hdept-businessCenter" placeholder="e.g. 514" />
+            </div>
+
+            <div class="field-block full" style="display:flex;align-items:center;gap:14px;margin-top:10px;">
               <button class="btn-solid" onclick="saveHotel()">Save hotel details</button>
               <span id="hotelSavedNote" style="font-size:12.5px;color:var(--signal);font-weight:600;opacity:0;transition:.3s;">Saved</span>
             </div>

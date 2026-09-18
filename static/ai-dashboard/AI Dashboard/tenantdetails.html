@@ -122,7 +122,6 @@
             <div class="field-block">
               <label for="regExtProtocol">Extension Protocol</label>
               <select id="regExtProtocol">
-                <option value="TCP">TCP</option>
                 <option value="UDP" selected>UDP</option>
               </select>
             </div>
@@ -167,6 +166,71 @@
               <label for="vAddress">Hotel Address</label>
               <textarea id="vAddress"></textarea>
             </div>
+
+            <div class="field-block full">
+              <h3 style="margin:12px 0 4px;font-size:15px;">Department Extensions</h3>
+              <div class="desc" style="margin-bottom:10px;">
+                Configure direct extensions for each hotel department. When a caller requests the <strong>Front Desk</strong>, the AI tries Front Desk first and automatically transfers to the <strong>Ring Group</strong> if Front Desk is unavailable or busy.
+              </div>
+            </div>
+
+            <div class="field-block">
+              <label for="dept-frontDesk">Front Desk Extension</label>
+              <input type="text" id="dept-frontDesk" placeholder="e.g. 501" />
+            </div>
+            <div class="field-block">
+              <label for="dept-ringGroup">Ring Group Extension</label>
+              <input type="text" id="dept-ringGroup" placeholder="e.g. 502" />
+            </div>
+            <div class="field-block">
+              <label for="dept-sales">Sales Extension</label>
+              <input type="text" id="dept-sales" placeholder="e.g. 503" />
+            </div>
+            <div class="field-block">
+              <label for="dept-gm">GM Extension</label>
+              <input type="text" id="dept-gm" placeholder="e.g. 504" />
+            </div>
+            <div class="field-block">
+              <label for="dept-laundry">Laundry Extension</label>
+              <input type="text" id="dept-laundry" placeholder="e.g. 505" />
+            </div>
+            <div class="field-block">
+              <label for="dept-lobby">Lobby Extension</label>
+              <input type="text" id="dept-lobby" placeholder="e.g. 506" />
+            </div>
+            <div class="field-block">
+              <label for="dept-fitness">Fitness Extension</label>
+              <input type="text" id="dept-fitness" placeholder="e.g. 507" />
+            </div>
+            <div class="field-block">
+              <label for="dept-pool">Pool Extension</label>
+              <input type="text" id="dept-pool" placeholder="e.g. 508" />
+            </div>
+            <div class="field-block">
+              <label for="dept-elevator">Elevator Extension</label>
+              <input type="text" id="dept-elevator" placeholder="e.g. 509" />
+            </div>
+            <div class="field-block">
+              <label for="dept-meetingRoom">Meeting Room Extension</label>
+              <input type="text" id="dept-meetingRoom" placeholder="e.g. 510" />
+            </div>
+            <div class="field-block">
+              <label for="dept-maintenanceRoom">Maintenance Room Extension</label>
+              <input type="text" id="dept-maintenanceRoom" placeholder="e.g. 511" />
+            </div>
+            <div class="field-block">
+              <label for="dept-office">Office Extension</label>
+              <input type="text" id="dept-office" placeholder="e.g. 512" />
+            </div>
+            <div class="field-block">
+              <label for="dept-agm">AGM Extension</label>
+              <input type="text" id="dept-agm" placeholder="e.g. 513" />
+            </div>
+            <div class="field-block">
+              <label for="dept-businessCenter">Business Center Extension</label>
+              <input type="text" id="dept-businessCenter" placeholder="e.g. 514" />
+            </div>
+
             <div class="field-block full" style="display:flex;align-items:center;gap:14px;margin-top:10px;">
               <button class="btn-solid" onclick="saveHotelDetails()">Save Hotel Details</button>
               <span id="hotelSavedNote" style="font-size:12.5px;color:var(--signal);font-weight:600;opacity:0;transition:.3s;">Saved</span>
