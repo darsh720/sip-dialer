@@ -93,6 +93,8 @@ export default function HotelDashboard() {
   const [newQ, setNewQ] = useState('');
   const [newA, setNewA] = useState('');
   const [kbSearch, setKbSearch] = useState('');
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
+  const [jsonCopied, setJsonCopied] = useState(false);
 
   // Call Logs Filters
   const [logSearch, setLogSearch] = useState('');
@@ -181,6 +183,48 @@ export default function HotelDashboard() {
   const handleDeleteQA = (indexToDelete) => {
     const updatedKb = data.kb.filter((_, idx) => idx !== indexToDelete);
     setData((prev) => ({ ...prev, kb: updatedKb }));
+  };
+
+  const aiKnowledgeBaseJson = JSON.stringify(
+    {
+      tenant_id: data.tenantId,
+      property_details: {
+        property_name: hotelForm.name,
+        property_phone: hotelForm.did,
+        property_address: hotelForm.address,
+        time_zone: hotelForm.tz,
+        front_desk_extension: hotelForm.frontExt,
+        fallback_extension: hotelForm.fallback,
+      },
+      hotel_details: {
+        greeting: hotelForm.greeting,
+        language: hotelForm.lang,
+        department_extensions: hotelForm.departmentExtensions,
+      },
+      knowledge_base: data.kb,
+    },
+    null,
+    2
+  );
+
+  const handleCopyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(aiKnowledgeBaseJson);
+      setJsonCopied(true);
+      setTimeout(() => setJsonCopied(false), 2000);
+    } catch (error) {
+      console.error('Could not copy AI knowledge base JSON', error);
+    }
+  };
+
+  const handleDownloadJson = () => {
+    const blob = new Blob([aiKnowledgeBaseJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${hotelForm.name || 'hotel'}-ai-knowledge-base.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Simulate incoming test call
@@ -577,9 +621,19 @@ export default function HotelDashboard() {
           {/* TAB 3: KNOWLEDGE BASE */}
           <div className={`tab-panel ${activeTab === 'kb' ? 'active' : ''}`}>
             <div className="card">
-              <h2>AI question &amp; answer knowledge base</h2>
-              <div className="desc">
-                The AI searches this list and speaks the matching answer to callers.
+              <div className="kb-heading">
+                <div>
+                  <h2>AI question &amp; answer knowledge base</h2>
+                  <div className="desc">
+                    The AI searches this list and speaks the matching answer to callers.
+                  </div>
+                </div>
+                <button type="button" className="btn-outline kb-json-button" onClick={() => setIsJsonModalOpen(true)}>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 5l-4 14" />
+                  </svg>
+                  View AI JSON
+                </button>
               </div>
 
               <div className="kb-add">
@@ -638,6 +692,43 @@ export default function HotelDashboard() {
               </div>
             </div>
           </div>
+
+          {isJsonModalOpen && (
+            <div className="json-modal-backdrop" role="presentation" onMouseDown={() => setIsJsonModalOpen(false)}>
+              <section
+                className="json-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="json-modal-title"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="json-modal-header">
+                  <div>
+                    <div className="json-modal-eyebrow">AI knowledge payload</div>
+                    <h2 id="json-modal-title">Property &amp; hotel details</h2>
+                    <p>Live JSON sent to the AI receptionist for {hotelForm.name || 'this property'}.</p>
+                  </div>
+                  <button type="button" className="icon-btn json-close" onClick={() => setIsJsonModalOpen(false)} aria-label="Close AI JSON modal">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6 6 18" />
+                    </svg>
+                  </button>
+                </div>
+                <pre className="json-preview"><code>{aiKnowledgeBaseJson}</code></pre>
+                <div className="json-modal-footer">
+                  <span>{data.kb.length} Q&amp;A entries · {Object.keys(hotelForm.departmentExtensions || {}).length} departments</span>
+                  <div className="json-modal-actions">
+                    <button type="button" className="btn-outline" onClick={handleDownloadJson}>
+                      Download JSON
+                    </button>
+                    <button type="button" className="btn-solid" onClick={handleCopyJson}>
+                      {jsonCopied ? 'Copied' : 'Copy JSON'}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
 
           {/* TAB 4: CALL LOGS */}
           <div className={`tab-panel ${activeTab === 'logs' ? 'active' : ''}`}>
