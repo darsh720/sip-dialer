@@ -161,7 +161,11 @@ def _patched_client_parse_message(self, message):
         return
 
     if getattr(message, "status", None) == SIPStatus.INTERNAL_SERVER_ERROR:
-        state["call_status"] = "Call failed: SIP 500 Internal Server Error"
+        headers = getattr(message, "headers", {}) or {}
+        reason = _get_hdr(headers, "Reason") or _get_hdr(headers, "Warning")
+        detail = f" ({reason})" if reason else ""
+        state["call_status"] = f"Call failed: SIP 500 Internal Server Error{detail}"
+        print(f"[SIP] PBX rejected call with SIP 500{detail}: {message.summary()}")
         broadcast_status()
         if self.callCallback is not None:
             self.callCallback(message)
@@ -564,6 +568,7 @@ async def _openai_realtime_session(call, api_key):
 
         playback_queue = asyncio.Queue(maxsize=500)
         playback_remainder = b""
+        transfer_requested = asyncio.Event()
         # Track how many audio chunks are queued/in-flight so the echo
         # suppression flag doesn't flicker on brief gaps between bursts.
         _agent_audio_inflight = 0
@@ -571,6 +576,7 @@ async def _openai_realtime_session(call, api_key):
 
         async def transfer_to_department(department):
             # Always read live from state so updated extensions are used
+            department = normalize_department(department)
             live_extensions = (state.get("hotel_profile") or {}).get("departmentExtensions", {})
             targets = [live_extensions.get(department, "")]
             if department == "frontDesk":
@@ -583,17 +589,27 @@ async def _openai_realtime_session(call, api_key):
             for target in targets:
                 try:
                     print(f"[TRANSFER] Attempting transfer to {target}")
+                    # Stop the AI RTP tasks before the transfer bridge owns the call media.
+                    transfer_requested.set()
+                    clear_playback()
+                    await asyncio.sleep(0.1)
                     await asyncio.to_thread(start_call_transfer, call, target)
                     return True, f"The caller was transferred to {department}."
                 except Exception as ex:
                     print(f"[TRANSFER] Failed for {target}: {ex}")
+                    transfer_requested.clear()
                     failures.append(str(ex))
             return False, "Nobody is available in that department right now. Offer to take a message."
 
         async def play_agent_audio():
             nonlocal _agent_audio_inflight
             while call.state == CallState.ANSWERED:
-                pcm_chunk = await playback_queue.get()
+                if transfer_requested.is_set():
+                    break
+                try:
+                    pcm_chunk = await asyncio.wait_for(playback_queue.get(), timeout=0.2)
+                except asyncio.TimeoutError:
+                    continue
                 agent_speaking.set()
                 # write_audio paces itself via the RTP transmitter timing;
                 # no extra sleep is needed (the old asyncio.sleep(CHUNK/RATE)
@@ -619,6 +635,8 @@ async def _openai_realtime_session(call, api_key):
             rate_state = None
             audio_chunks = 0
             while call.state == CallState.ANSWERED:
+                if transfer_requested.is_set():
+                    break
                 pcm_8khz_unsigned = await asyncio.to_thread(
                     call.read_audio, CHUNK, True
                 )

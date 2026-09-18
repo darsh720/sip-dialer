@@ -46,7 +46,7 @@ const createDefaultHotelForm = (tenantId, hotelQuery) =>
 
 export default function TenantDetails() {
   const [searchParams] = useSearchParams();
-  const tenantId = searchParams.get('tenant') || '1000';
+  const tenantId = searchParams.get('tenant') || '1001';
   const hotelQuery = searchParams.get('hotel') || 'ABC Hotel';
 
   const [activeTab, setActiveTab] = useState('registration');
